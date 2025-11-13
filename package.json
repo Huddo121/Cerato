@@ -1,0 +1,41 @@
+{
+  "name": "cerato",
+  "version": "0.0.1",
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "Michael Hudson <huddo121@gmail.com>",
+  "homepage": "https://github.com/Huddo121/Cerato",
+  "bugs": {
+    "url": "https://github.com/Huddo121/Cerato/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Huddo121/Cerato.git"
+  },
+  "packageManager": "pnpm@10.8.0",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "hono": "4.9.2",
+    "zod": "4.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "tsdown": "0.16.4",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown"
+  }
+}
