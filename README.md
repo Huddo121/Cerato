@@ -1,8 +1,7 @@
 # Cerato
 
-<div style="border: 1px solid #ef4444; background-color: #ef444430; border-radius: 8px; padding: 8px 12px; text-align: center; font-weight: bold;">
-  ⚠️ I've extracted this library out of a toy project, it's extremely unfinished, untested, limited, experimental code. ⚠️
-</div>
+> [!CAUTION]
+> I've extracted this library out of a toy project, it's extremely unfinished, untested, limited, experimental code.
 
 Cerato is an experiment where I attempt to make it easy to build end-to-end typesafe APIs in Typescript.
 
