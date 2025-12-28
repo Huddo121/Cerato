@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: I'm doing some sinning in here */
 import type z from "zod";
 import type { ZodAny } from "zod";
-import type { PathParts } from "../api.ts";
+import type { PathParts } from "../api";
 import {
   type AnyEndpoint,
   type AnyMulti,
@@ -28,18 +28,13 @@ export type FetchClientResult<E extends AnyEndpoint> = AsResponse<OutputsForEndp
 
 type WithBodyIfRequired<E extends AnyEndpoint> = InputForEndpoint<E> extends undefined ? {} : { body: InputForEndpoint<E> };
 type WithPathParamsIfRequired<PathParams extends Record<string, string>> = PathParams extends EmptyRecord ? {} : { pathParams: PathParams };
-type WithHeaderParamIfRequired<E extends AnyEndpoint> = RequiredHeadersForEndpoint<E> extends undefined
-  ? {}
-  : { headers: RequiredHeadersForEndpoint<E> };
+type WithHeaderParamIfRequired<E extends AnyEndpoint> = RequiredHeadersForEndpoint<E> extends undefined ? {} : { headers: RequiredHeadersForEndpoint<E> };
 
 export type FetchClientInputs<E extends AnyEndpoint, PathParams extends Record<string, string>> = WithBodyIfRequired<E> &
   WithPathParamsIfRequired<PathParams> &
   WithHeaderParamIfRequired<E>;
 
-export type ClientFunction<E extends AnyEndpoint, PathParams extends Record<string, string>> = FetchClientInputs<
-  E,
-  PathParams
-> extends EmptyRecord
+export type ClientFunction<E extends AnyEndpoint, PathParams extends Record<string, string>> = FetchClientInputs<E, PathParams> extends EmptyRecord
   ? () => Promise<FetchClientResult<E>>
   : (input: FetchClientInputs<E, PathParams>) => Promise<FetchClientResult<E>>;
 
@@ -51,9 +46,7 @@ export type ClientForEndpoint<E extends AnyEndpoint, PathParams extends Record<s
   [K in InputForEndpoint<E> extends undefined ? never : "inputValidator"]: z.ZodType<InputForEndpoint<E>>;
 } & FetchClientForEndpoint<E, PathParams>;
 
-export type RequiredHeadersForEndpoint<E extends AnyEndpoint> = E extends Endpoint<infer _M, infer _I, infer _O, infer _Q, infer H>
-  ? H
-  : never;
+export type RequiredHeadersForEndpoint<E extends AnyEndpoint> = E extends Endpoint<infer _M, infer _I, infer _O, infer _Q, infer H> ? H : never;
 
 const addInputValidator = <E extends AnyEndpoint, P extends Record<string, string>>(
   endpoint: E,
@@ -70,6 +63,14 @@ const pathHasParams = <P extends PathParts>(path: P) => {
   return result;
 };
 
+const contentTypeHeaderForEndpoint = <E extends AnyEndpoint>(endpoint: E): { "Content-Type": "application/json" } | undefined => {
+  if (endpoint.accepts === "json") {
+    return { "Content-Type": "application/json" };
+  } else if (endpoint.accepts === "multipart-form") {
+    return undefined; // Let the browser set the header, it'll calculate some params itself
+  }
+};
+
 export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   path: P,
   endpoint: E,
@@ -80,14 +81,16 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   const baseFetch = async (
     method: Methods,
     apiPath: string,
-    body: string | undefined,
+    body: FormData | string | undefined,
     extraHeaders: Record<string, string> | undefined,
   ): Promise<FetchClientResult<E>> => {
+    const contentTypeHeader = contentTypeHeaderForEndpoint(endpoint);
+
     const response = await fetch(`${host ?? ""}${apiPath}`, {
       method: endpoint.allowedMethod,
       body,
       headers: {
-        "Content-Type": "application/json",
+        ...contentTypeHeader,
         Accept: "application/json",
         ...extraHeaders,
       },
@@ -122,17 +125,30 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   };
 
   const fetchWithInputs = async (input: FetchClientInputs<E, PathParams>): Promise<FetchClientResult<E>> => {
-    const hasPathParams = "pathParams" in input;
-    console.log("Fetching with inputs", { input, path, hasPathParams });
     const apiPath = resolvePath(path, ("pathParams" in input ? input.pathParams : {}) as PathParams);
-    console.log("Using path:", apiPath);
-    const body = "body" in input ? JSON.stringify(input.body) : undefined;
+
+    let body: undefined | FormData | string;
+    if ("body" in input) {
+      if (endpoint.accepts === "json") {
+        body = JSON.stringify(input.body);
+      } else if (endpoint.accepts === "multipart-form") {
+        const form = new FormData();
+        Object.entries(input.body).forEach(([k, v]) => {
+          if (v !== undefined) {
+            form.set(k, v);
+          }
+        });
+        body = form;
+      } else {
+        throw new Error("Unknown Accepts parameter encountered for endpoint");
+      }
+    }
+
     const headers = "headers" in input ? input.headers : undefined;
     return baseFetch(endpoint.allowedMethod, apiPath, body, headers);
   };
 
   const fetchWithoutInputs = async (): Promise<FetchClientResult<E>> => {
-    console.log("fetching without inputs", { path });
     const apiPath = `/${path.join("/")}`;
 
     return baseFetch(endpoint.allowedMethod, apiPath, undefined, undefined);
@@ -140,12 +156,8 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
 
   const hasInputs = endpoint.inputValidator !== undefined || pathHasParams(path) || endpoint.requiredHeaders.length > 0;
 
-  console.log("Created fetch client for endpoint", { path, hasInputs });
-
   const client = {
-    [endpoint.allowedMethod]: hasInputs
-      ? (fetchWithInputs as ClientFunction<E, PathParams>)
-      : (fetchWithoutInputs as ClientFunction<E, PathParams>),
+    [endpoint.allowedMethod]: hasInputs ? (fetchWithInputs as ClientFunction<E, PathParams>) : (fetchWithoutInputs as ClientFunction<E, PathParams>),
   } as FetchClientForEndpoint<E, PathParams>;
 
   const finalClient = addInputValidator(endpoint, client);
@@ -153,14 +165,8 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   return finalClient;
 };
 
-// type MethodsForMulti<M extends AnyMulti> = EndpointMappingForMulti<M> extends EndpointMapping<infer G, infer P, infer D, infer _C>
-//   ? Possibly<"GET", G> & Possibly<"POST", P> & Possibly<"DELETE", D>
-//   : never;
-
 export type FetchClientsForEndpointMapping<EM, Path extends PathParts> = {
-  [K in keyof EM as K extends "children" ? never : K]: EM[K] extends AnyEndpoint
-  ? ClientFunction<EM[K], AccumulatePathParams<Path>>
-  : never;
+  [K in keyof EM as K extends "children" ? never : K]: EM[K] extends AnyEndpoint ? ClientFunction<EM[K], AccumulatePathParams<Path>> : never;
 };
 
 type WithChildApiIfRequired<A extends API | undefined, Path extends PathParts = []> = A extends API ? ClientsForApi<A, Path> : {};
@@ -170,38 +176,40 @@ type ClientsForMulti<M extends AnyMulti, Path extends PathParts = []> = FetchCli
 
 export type ClientsForApi<A extends API, Path extends PathParts = []> = {
   [k in keyof A]: A[k] extends AnyEndpoint
-  ? ClientForEndpoint<A[k], AccumulatePathParams<[...Path, k & string]>>
-  : A[k] extends AnyMulti
-  ? ClientsForMulti<A[k], [...Path, k & string]>
-  : ClientsForApi<A[k] & API, [...Path, k & string]>;
+    ? ClientForEndpoint<A[k], AccumulatePathParams<[...Path, k & string]>>
+    : A[k] extends AnyMulti
+      ? ClientsForMulti<A[k], [...Path, k & string]>
+      : ClientsForApi<A[k] & API, [...Path, k & string]>;
 };
 
 const createClientsForMulti = <M extends AnyMulti>(multi: M, basePath: PathParts, host?: string): ClientsForMulti<M> => {
   const mapping = multi.endpointMapping;
-  const clients = [];
-
   let clientObj = {};
 
   if ("GET" in mapping) {
-    clients.push(["GET", createClient(basePath, mapping.GET, host)]);
     clientObj = { ...clientObj, ...createClient(basePath, mapping.GET, host) };
   }
 
   if ("POST" in mapping) {
-    clients.push(["POST", createClient(basePath, mapping.POST, host)]);
+    clientObj = { ...clientObj, ...createClient(basePath, mapping.POST, host) };
+  }
+
+  if ("PUT" in mapping) {
+    clientObj = { ...clientObj, ...createClient(basePath, mapping.PUT, host) };
+  }
+
+  if ("PATCH" in mapping) {
+    clientObj = { ...clientObj, ...createClient(basePath, mapping.PATCH, host) };
   }
 
   if ("DELETE" in mapping) {
-    clients.push(["POST", createClient(basePath, mapping.DELETE, host)]);
+    clientObj = { ...clientObj, ...createClient(basePath, mapping.DELETE, host) };
   }
 
   if ("children" in mapping) {
     const childClients = createClientsFromApi(mapping.children, basePath, host);
-    clients.push(...Object.entries(childClients));
     clientObj = { ...clientObj, ...childClients };
   }
-
-  console.log("Created clients for Multi", clientObj);
 
   return clientObj as ClientsForMulti<M>;
 };
@@ -210,6 +218,7 @@ export const createClientsFromApi = <A extends API>(api: A, basePath: PathParts 
   const entries = typedEntries(api);
   const clientTree = entries.map(([k, v]) => {
     const newPath = [...basePath, k] as PathParts;
+
     if (v instanceof Endpoint) {
       return [k, createClient(newPath, v, host)];
     } else if (v instanceof Multi) {

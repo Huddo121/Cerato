@@ -1,10 +1,12 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: Some empty-record needs that aren't met by using Record<string, never> */
 import { type Context, Hono } from "hono";
-import type { BlankEnv } from "hono/types";
+import type { BlankEnv, BlankInput } from "hono/types";
 import type { RedirectStatusCode } from "hono/utils/http-status";
+import type { ZodType } from "zod";
 import type { PathPart, PathParts } from "../api";
 import {
   type AnyEndpoint,
+  type AnyEndpointMapping,
   type AnyMulti,
   type API,
   type ChildrenForMulti,
@@ -16,6 +18,7 @@ import {
   type ResponseCode,
   type ResponsesForEndpoint,
 } from "../Endpoint";
+import { isNonContentfulResponseCode } from "../status-utils";
 import { typedEntries } from "../type-utils";
 
 type FlattenedPath<P extends PathParts> = P extends readonly [infer PH, ...infer PT]
@@ -35,13 +38,7 @@ type HandlerContext<Env extends BlankEnv, Path extends PathParts, E extends AnyE
 
 type HonoInput<E extends AnyEndpoint> = { in: InputForEndpoint<E>; out: OutputValidatorsForEndpoint<E>; outputFormat: "json" };
 
-type HonoHandlerForEndpoint<Path extends PathParts, E extends AnyEndpoint, Services> = E extends Endpoint<
-  infer _M,
-  infer I,
-  infer _O,
-  infer _Q,
-  infer _H
->
+type HonoHandlerForEndpoint<Path extends PathParts, E extends AnyEndpoint, Services> = E extends Endpoint<infer _M, infer I, infer _O, infer _Q, infer _H>
   ? (ctx: HandlerContext<BlankEnv, Path, E, Services> & { body: I }) => Promise<ResponsesForEndpoint<E>>
   : never;
 
@@ -51,7 +48,7 @@ export type WithHandlerIfRequired<Path extends PathParts, E extends AnyEndpoint 
     ? HonoTraverseApi<Path, E, Services>
     : {};
 
-export type HonoHandlersForEndpointMapping<Path extends PathParts, EM, Services> = {
+export type HonoHandlersForEndpointMapping<Path extends PathParts, EM extends AnyEndpointMapping, Services> = {
   [K in keyof EM as K extends "children" ? never : K]: EM[K] extends AnyEndpoint ? HonoHandlerForEndpoint<Path, EM[K], Services> : never;
 };
 // Kind of dodgy re-use of the API handling for Multi Routes
@@ -96,6 +93,46 @@ const appendPath = <Path extends PathParts, Part extends PathPart>(parent: Path,
   return [...parent, end];
 };
 
+const respond = (honoCtx: Context<BlankEnv, string, BlankInput>, status: ResponseCode, responseBody: unknown, bodyValidator?: ZodType) => {
+  if (bodyValidator === undefined) {
+    throw new Error(`Endpoint handler returned unexpected status code: ${status}. No validator could be found.`);
+  }
+  if (isNonContentfulResponseCode(status) && responseBody !== undefined) {
+    throw new Error(`A non contentful status code (${status}) was returned by the handler with a body`);
+  }
+
+  const parsedBody = bodyValidator.encode(responseBody);
+
+  if (isNonContentfulResponseCode(status)) {
+    return honoCtx.body(null, status);
+  } else {
+    return honoCtx.json(parsedBody, status);
+  }
+};
+
+const getBody = async <E extends AnyEndpoint>(endpoint: E, honoCtx: Context): Promise<InputForEndpoint<E>> => {
+  if (endpoint.inputValidator === undefined) {
+    // TS Can't know that the value being undefined means the Endpoint's I parameter is also undefined
+    return undefined as InputForEndpoint<E>;
+  }
+
+  if (endpoint.accepts === "json") {
+    const json = await honoCtx.req.json();
+    const validated = endpoint.inputValidator.parse(json);
+
+    // TODO: I should support bad-input handlers and the like
+    return validated;
+  } else if (endpoint.accepts === "multipart-form") {
+    const form = await honoCtx.req.formData();
+    const asObject = Object.fromEntries(form.entries());
+    const validated = endpoint.inputValidator.parse(asObject);
+
+    return validated;
+  } else {
+    throw new Error("Unexpected 'accepts' parameter for Endpoint");
+  }
+};
+
 const addGetHandler = <Path extends PathParts, Services>(
   app: Hono,
   endpoint: AnyEndpoint,
@@ -104,15 +141,19 @@ const addGetHandler = <Path extends PathParts, Services>(
   services: Services,
 ) => {
   app.get(path, async (honoCtx) => {
-    const reqBody = endpoint.inputValidator !== undefined ? await honoCtx.req.json() : undefined;
+    const reqBody = await getBody(endpoint, honoCtx);
     const ctx = { hono: honoCtx, services, body: reqBody };
     const [status, responseBody] = await handle(ctx);
-    const statusAsNumber = Number(status);
+    const statusCode = Number(status) as ResponseCode;
+
     // This is dodgy, I should switch away from tuples
-    if (statusAsNumber >= 300 && statusAsNumber <= 399) {
-      return honoCtx.redirect(responseBody as string, statusAsNumber as RedirectStatusCode);
+    if (statusCode >= 300 && statusCode <= 399) {
+      return honoCtx.redirect(responseBody as string, statusCode as RedirectStatusCode);
     }
-    return honoCtx.json(responseBody as unknown as {}, Number(status) as ResponseCode);
+
+    const outputValidator = endpoint.outputValidators?.[status];
+
+    return respond(honoCtx, statusCode, responseBody, outputValidator);
   });
 };
 
@@ -124,10 +165,49 @@ const addPostHandler = <Path extends PathParts, Services>(
   services: Services,
 ) => {
   app.post(path, async (honoCtx) => {
-    const reqBody = endpoint.inputValidator !== undefined ? await honoCtx.req.json() : undefined;
+    const reqBody = await getBody(endpoint, honoCtx);
     const ctx = { hono: honoCtx, services, body: reqBody };
     const [status, responseBody] = await handle(ctx);
-    return honoCtx.json(responseBody as unknown as {}, Number(status) as ResponseCode);
+    const statusCode = Number(status) as ResponseCode;
+    const outputValidator = endpoint.outputValidators?.[status];
+
+    return respond(honoCtx, statusCode, responseBody, outputValidator);
+  });
+};
+
+const addPutHandler = <Path extends PathParts, Services>(
+  app: Hono,
+  endpoint: AnyEndpoint,
+  path: string,
+  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
+  services: Services,
+) => {
+  app.put(path, async (honoCtx) => {
+    const reqBody = await getBody(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody };
+    const [status, responseBody] = await handle(ctx);
+    const statusCode = Number(status) as ResponseCode;
+    const outputValidator = endpoint.outputValidators?.[status];
+
+    return respond(honoCtx, statusCode, responseBody, outputValidator);
+  });
+};
+
+const addPatchHandler = <Path extends PathParts, Services>(
+  app: Hono,
+  endpoint: AnyEndpoint,
+  path: string,
+  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
+  services: Services,
+) => {
+  app.patch(path, async (honoCtx) => {
+    const reqBody = await getBody(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody };
+    const [status, responseBody] = await handle(ctx);
+    const statusCode = Number(status) as ResponseCode;
+    const outputValidator = endpoint.outputValidators?.[status];
+
+    return respond(honoCtx, statusCode, responseBody, outputValidator);
   });
 };
 
@@ -139,10 +219,13 @@ const addDeleteHandler = <Path extends PathParts, Services>(
   services: Services,
 ) => {
   app.delete(path, async (honoCtx) => {
-    const reqBody = endpoint.inputValidator !== undefined ? await honoCtx.req.json() : undefined;
+    const reqBody = await getBody(endpoint, honoCtx);
     const ctx = { hono: honoCtx, services, body: reqBody };
     const [status, responseBody] = await handle(ctx);
-    return honoCtx.json(responseBody as unknown as {}, Number(status) as ResponseCode);
+    const statusCode = Number(status) as ResponseCode;
+    const outputValidator = endpoint.outputValidators?.[status];
+
+    return respond(honoCtx, statusCode, responseBody, outputValidator);
   });
 };
 
@@ -157,6 +240,10 @@ const addHandler = <Path extends PathParts, Services>(
     addGetHandler(app, endpoint, path, handle, services);
   } else if (endpoint.allowedMethod === "POST") {
     addPostHandler(app, endpoint, path, handle, services);
+  } else if (endpoint.allowedMethod === "PUT") {
+    addPutHandler(app, endpoint, path, handle, services);
+  } else if (endpoint.allowedMethod === "PATCH") {
+    addPatchHandler(app, endpoint, path, handle, services);
   } else if (endpoint.allowedMethod === "DELETE") {
     addDeleteHandler(app, endpoint, path, handle, services);
   } else {
@@ -194,6 +281,14 @@ const traverseApi = <Path extends PathParts, A extends API, Services>(
 
       if ("POST" in mapping && "POST" in multiHandlers) {
         addHandler(app, mapping.POST, path, multiHandlers.POST, services);
+      }
+
+      if ("PUT" in mapping && "PUT" in multiHandlers) {
+        addHandler(app, mapping.PUT, path, multiHandlers.PUT, services);
+      }
+
+      if ("PATCH" in mapping && "PATCH" in multiHandlers) {
+        addHandler(app, mapping.PATCH, path, multiHandlers.PATCH, services);
       }
 
       if ("DELETE" in mapping && "DELETE" in multiHandlers) {

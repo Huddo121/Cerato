@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: EmptyRecord doesn't work in these cases */
-import type { PathParts } from "./api.ts";
+import type { PathParts } from "./api";
 
 // Extract path parameters from a string key
 export type ExtractPathParams<K extends string> = K extends `:${infer Param}` ? { [P in Param]: string } : {};
@@ -7,10 +7,10 @@ export type ExtractPathParams<K extends string> = K extends `:${infer Param}` ? 
 // Accumulate path parameters from all keys in a path
 export type AccumulatePathParams<Keys extends readonly string[]> = Keys extends readonly [infer First, ...infer Rest]
   ? First extends string
-  ? Rest extends readonly string[]
-  ? ExtractPathParams<First> & AccumulatePathParams<Rest>
-  : ExtractPathParams<First>
-  : {}
+    ? Rest extends readonly string[]
+      ? ExtractPathParams<First> & AccumulatePathParams<Rest>
+      : ExtractPathParams<First>
+    : {}
   : {};
 
 export const resolvePath = <P extends PathParts>(path: P, inputs: AccumulatePathParams<P>): string => {
@@ -23,8 +23,6 @@ export const resolvePath = <P extends PathParts>(path: P, inputs: AccumulatePath
     }
     return part;
   });
-
-  console.log("Resolved path", { resolvedParts, inputs, path });
 
   return `/${resolvedParts.join("/")}`;
 };
