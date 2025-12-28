@@ -27,7 +27,7 @@ Because I'm relying on the definition of the API as a (potentially large) Typesc
 ## Gaps with the work done so far
 
 1. No way of tracking authentication, or other aspects of an API that I hadn't yet encountered in the original host project
-2. No support for ~~non-json request and~~ response bodies
+2. No support for non-json ~~request and~~ response bodies
 3. Modeling responses as a tuple of `[ResponseCode, ResponseBody]` "works" but I don't love it and I do some really horrible stuff when it comes to dealing with redirects
 4. Go-to-reference sometimes takes you to library code rather than the API definition
 5. Splitting out the different interpretation targets to supporting libraries to keep core library size down
