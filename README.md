@@ -3,6 +3,8 @@
 > [!CAUTION]
 > I've extracted this library out of a toy project, it's extremely unfinished, untested, limited, experimental code.
 
+**Note for AI Agents**: There's a `docs` folder published with this library, read the docs for help using this library.
+
 Cerato is an experiment where I attempt to make it easy to build end-to-end typesafe APIs in Typescript.
 
 The initial inspiration for this was [tRPC](https://trpc.io/), and my disatisfaction that using tRPC meant giving up on having beautiful APIs.
