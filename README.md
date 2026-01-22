@@ -35,3 +35,15 @@ Because I'm relying on the definition of the API as a (potentially large) Typesc
 5. Splitting out the different interpretation targets to supporting libraries to keep core library size down
 6. No transformation of formatted data yet, [Zod codecs](https://zod.dev/codecs) are probably the answer here
 7. The type ascription when you're splitting up routes with path params are awful at the moment, some type util would make this nicer
+
+# TODO
+
+- [ ] URGENT: Return types of handlers don't seem to be getting checked?
+- [x] Include the src in the packaged release
+- [ ] Add parsers for path params (e.g. must be a UUID, or ULID, or 8 chars of hex)
+- [ ] Support query params
+
+## Longer term todo
+
+- [ ] Export APIs to common formats (i.e. OpenAPI, Yaak?)
+- [ ] API Explorer interface

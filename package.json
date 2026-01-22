@@ -29,18 +29,19 @@
   },
   "files": [
     "dist",
-    "docs"
+    "docs",
+    "src"
   ],
   "devDependencies": {
-    "@types/node": "24.10.1",
-    "hono": "4.9.2",
-    "tsdown": "0.16.4",
+    "@types/node": "25.0.9",
+    "hono": "4.11.4",
+    "tsdown": "0.20.0-beta.3",
     "typescript": "5.9.3",
-    "zod": "4.0.17"
+    "zod": "4.3.5"
   },
   "peerDependencies": {
     "hono": "^4.0.0",
-    "zod": "^4.0.0"
+    "zod": "^4.1.0"
   },
   "scripts": {
     "dev": "tsdown --watch",
