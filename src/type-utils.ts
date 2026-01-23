@@ -49,6 +49,8 @@ export const typedEntries = <T extends object>(record: T): EntriesOf<T> => {
   return Object.entries(record) as EntriesOf<T>;
 };
 
-export const typedKeys = <T extends Record<string, unknown>>(record: T): (keyof T)[] => {
+export const typedKeys = <T extends Record<string, unknown>>(
+  record: T,
+): (keyof T)[] => {
   return Object.keys(record) as (keyof T)[];
 };
