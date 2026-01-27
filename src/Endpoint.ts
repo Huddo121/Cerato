@@ -372,3 +372,5 @@ type RoutesForEndpointMapping<MP extends AnyEndpointMapping> = {
 export type RoutesForMulti<M extends AnyMulti> = RoutesForEndpointMapping<
   EndpointMappingForMulti<M>
 >;
+
+export type AnyApi = API | AnyEndpoint | AnyMulti;
