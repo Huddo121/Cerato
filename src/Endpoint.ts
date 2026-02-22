@@ -32,11 +32,13 @@ export type EndpointParams<
   M extends Methods,
   I,
   O extends OutputMapping | undefined,
+  Q,
   H,
   A extends Accepts,
 > = {
   method: M;
   inputValidator?: z.ZodType<I>;
+  queryValidator?: z.ZodType<Q>;
   outputValidators?: O;
   requiredHeaders?: (keyof H)[];
   accepts?: A;
@@ -145,14 +147,16 @@ export class Endpoint<
   A extends Accepts = "json",
 > {
   readonly inputValidator: z.ZodType<I> | undefined;
+  readonly queryValidator: z.ZodType<Q> | undefined;
   readonly outputValidators: O | undefined;
   readonly allowedMethod: M;
   readonly requiredHeaders: (keyof H)[];
   readonly accepts: Accepts;
 
-  constructor(params: EndpointParams<M, I, O, H, A>) {
+  constructor(params: EndpointParams<M, I, O, Q, H, A>) {
     this.allowedMethod = params.method;
     this.inputValidator = params.inputValidator;
+    this.queryValidator = params.queryValidator;
     this.outputValidators = params.outputValidators;
     this.requiredHeaders = params.requiredHeaders ?? [];
     this.accepts = params.accepts ?? "json";
@@ -214,6 +218,10 @@ export class Endpoint<
     validator: z.ZodType<ZI>,
   ): Endpoint<"POST", ZI, EmptyRecord, undefined, undefined> {
     return new Endpoint({ method: "POST", inputValidator: validator });
+  }
+
+  query<Q2>(validator: z.ZodType<Q2>): Endpoint<M, I, O, Q2, H, A> {
+    return this.clone({ queryValidator: validator });
   }
 
   output<C extends ResponseCode, Z extends z.ZodType = ZodUndefined>(
@@ -291,12 +299,14 @@ export class Endpoint<
     H2 extends Record<string, string> | undefined = H,
     A2 extends Accepts = A,
   >(
-    overrides: Partial<EndpointParams<M2, I2, O2, H2, A2>>,
+    overrides: Partial<EndpointParams<M2, I2, O2, Q2, H2, A2>>,
   ): Endpoint<M2, I2, O2, Q2, H2, A2> {
     return new Endpoint<M2, I2, O2, Q2, H2, A2>({
       method: (overrides.method ?? this.allowedMethod) as M2,
       inputValidator: (overrides.inputValidator ??
         this.inputValidator) as z.ZodType<I2>,
+      queryValidator: (overrides.queryValidator ??
+        this.queryValidator) as z.ZodType<Q2>,
       outputValidators: (overrides.outputValidators ??
         this.outputValidators) as O2,
       requiredHeaders: (overrides.requiredHeaders ??
@@ -324,6 +334,8 @@ export type MethodForEndpoint<E extends AnyEndpoint> =
   E extends Endpoint<infer M, any, any, any, any> ? M : never;
 export type InputForEndpoint<E extends AnyEndpoint> =
   E extends Endpoint<any, infer I, any, any, any> ? I : never;
+export type QueryForEndpoint<E extends AnyEndpoint> =
+  E extends Endpoint<any, any, any, infer Q, any> ? Q : never;
 /** A mapping between the response status code and the validator of the expected response body */
 export type OutputValidatorsForEndpoint<E extends AnyEndpoint> =
   E extends Endpoint<any, any, infer O, any, any> ? O : never;

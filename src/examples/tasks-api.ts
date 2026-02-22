@@ -24,7 +24,15 @@ const notFoundSchema = z.object({
 
 const tasksApi = {
   tasks: Endpoint.multi({
-    GET: Endpoint.get().output(200, z.array(taskSchema)),
+    GET: Endpoint.get()
+      .query(
+        z.object({
+          completed: z.enum(["true", "false"]).optional(),
+          tags: z.array(z.string()).optional(),
+          limit: z.coerce.number().optional(),
+        }),
+      )
+      .output(200, z.array(taskSchema)),
     POST: Endpoint.post()
       .input(createTaskRequestSchema)
       .output(200, taskSchema),
@@ -55,7 +63,13 @@ const tasksClientExample = async () => {
 
   const newTask = createTaskResponse.responseBody;
 
-  const getTasksResponse = await tasksClient.tasks.GET();
+  const getTasksResponse = await tasksClient.tasks.GET({
+    query: {
+      completed: "false",
+      tags: ["home", "urgent"],
+      limit: 25,
+    },
+  });
   const allTasks = getTasksResponse.responseBody;
 
   console.log(`Retrieved all tasks, found ${allTasks.length} tasks`);
@@ -85,6 +99,7 @@ let tasks: Task[] = [
 const taskHandlers: HonoHandlersFor<[], TasksApi, {}> = {
   tasks: {
     GET: async (ctx) => {
+      console.log("Task query params", ctx.query);
       return [200, tasks];
     },
     POST: async (ctx) => {

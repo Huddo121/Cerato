@@ -18,7 +18,14 @@ A single Endpoint can handle different HTTP Methods, while also having child rou
 ```typescript
 const tasksApi = {
   tasks: Endpoint.multi({
-    GET: Endpoint.get().output(200, z.array(taskSchema)),
+    GET: Endpoint.get()
+      .query(
+        z.object({
+          completed: z.enum(["true", "false"]).optional(),
+          tags: z.array(z.string()).optional(),
+        })
+      )
+      .output(200, z.array(taskSchema)),
     POST: Endpoint.post()
       .input(createTaskRequestSchema)
       .output(200, taskSchema),
@@ -28,5 +35,18 @@ const tasksApi = {
   })
 }
 ```
+
+When using generated fetch clients, query parameters are passed as a `query` object:
+
+```typescript
+const tasks = await tasksClient.tasks.GET({
+  query: {
+    completed: "false",
+    tags: ["home", "urgent"], // serialized as ?tags=home&tags=urgent
+  },
+});
+```
+
+Query parameters are either present with a value or omitted. `null` is not a valid query value and will throw.
 
 The above definition would correspond to an API with a `GET /tasks` endpoint that returns a `Task[]` with a `200` status code, a `POST /tasks` endpoint that accepts a `CreateTaskRequest` and returns the newly created `Task` with a `200` status code, and a `GET /tasks/:id` endpoint that either returns the `Task` with a `200` status code, or if the task can't be found then some 'not found' response with a `404` status code.

@@ -14,6 +14,7 @@ import {
   type Methods,
   Multi,
   type OutputsForEndpoint,
+  type QueryForEndpoint,
   type OutputValidatorsForEndpoint,
 } from "../Endpoint";
 import { type AccumulatePathParams, resolvePath } from "../path-utils";
@@ -36,13 +37,16 @@ type WithHeaderParamIfRequired<E extends AnyEndpoint> =
   RequiredHeadersForEndpoint<E> extends undefined
     ? {}
     : { headers: RequiredHeadersForEndpoint<E> };
+type WithQueryIfRequired<E extends AnyEndpoint> =
+  QueryForEndpoint<E> extends undefined ? {} : { query: QueryForEndpoint<E> };
 
 export type FetchClientInputs<
   E extends AnyEndpoint,
   PathParams extends Record<string, string>,
 > = WithBodyIfRequired<E> &
   WithPathParamsIfRequired<PathParams> &
-  WithHeaderParamIfRequired<E>;
+  WithHeaderParamIfRequired<E> &
+  WithQueryIfRequired<E>;
 
 export type ClientFunction<
   E extends AnyEndpoint,
@@ -88,6 +92,55 @@ const addInputValidator = <
 const pathHasParams = <P extends PathParts>(path: P) => {
   const result = path.some((part) => part.startsWith(":"));
   return result;
+};
+
+type QueryScalar = string | number | boolean;
+
+const isQueryScalar = (value: unknown): value is QueryScalar => {
+  return (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+};
+
+const serializeQuery = (query: Record<string, unknown>): string => {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === undefined) {
+      return;
+    }
+
+    if (value === null) {
+      throw new Error(`Query parameter '${key}' cannot be null`);
+    }
+
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item === null) {
+          throw new Error(`Query parameter '${key}' cannot contain null`);
+        }
+        if (!isQueryScalar(item)) {
+          throw new Error(
+            `Query parameter '${key}' must be an array of primitive values`,
+          );
+        }
+        params.append(key, String(item));
+      });
+      return;
+    }
+
+    if (!isQueryScalar(value)) {
+      throw new Error(
+        `Query parameter '${key}' must be a primitive value or array of primitives`,
+      );
+    }
+
+    params.append(key, String(value));
+  });
+
+  return params.toString();
 };
 
 const contentTypeHeaderForEndpoint = <E extends AnyEndpoint>(
@@ -160,10 +213,16 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   const fetchWithInputs = async (
     input: FetchClientInputs<E, PathParams>,
   ): Promise<FetchClientResult<E>> => {
-    const apiPath = resolvePath(
+    const resolvedPath = resolvePath(
       path,
       ("pathParams" in input ? input.pathParams : {}) as PathParams,
     );
+    const queryString =
+      "query" in input
+        ? serializeQuery(input.query as Record<string, unknown>)
+        : "";
+    const apiPath =
+      queryString.length > 0 ? `${resolvedPath}?${queryString}` : resolvedPath;
 
     let body: undefined | FormData | string;
     if ("body" in input) {
@@ -194,6 +253,7 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
 
   const hasInputs =
     endpoint.inputValidator !== undefined ||
+    endpoint.queryValidator !== undefined ||
     pathHasParams(path) ||
     endpoint.requiredHeaders.length > 0;
 

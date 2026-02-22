@@ -2,7 +2,7 @@
 import { type Context, Hono } from "hono";
 import type { BlankEnv, BlankInput } from "hono/types";
 import type { RedirectStatusCode } from "hono/utils/http-status";
-import type { ZodType } from "zod";
+import z, { type ZodType } from "zod";
 import type { PathPart, PathParts } from "../api";
 import {
   type AnyEndpoint,
@@ -15,6 +15,7 @@ import {
   type InputForEndpoint,
   Multi,
   type OutputValidatorsForEndpoint,
+  type QueryForEndpoint,
   type ResponseCode,
   type ResponsesForEndpoint,
 } from "../Endpoint";
@@ -57,9 +58,9 @@ type HonoHandlerForEndpoint<
   Path extends PathParts,
   E extends AnyEndpoint,
   Services,
-> = E extends Endpoint<infer _M, infer I, infer _O, infer _Q, infer _H>
+> = E extends Endpoint<infer _M, infer I, infer _O, infer Q, infer _H>
   ? (
-      ctx: HandlerContext<BlankEnv, Path, E, Services> & { body: I },
+      ctx: HandlerContext<BlankEnv, Path, E, Services> & { body: I; query: Q },
     ) => Promise<ResponsesForEndpoint<E>>
   : never;
 
@@ -203,6 +204,81 @@ const getBody = async <E extends AnyEndpoint>(
   }
 };
 
+type ZodTypeDef = {
+  type?: string;
+  shape?: Record<string, z.ZodType>;
+  innerType?: z.ZodType;
+  out?: z.ZodType;
+};
+
+const unwrapQueryPropertySchema = (schema: z.ZodType): z.ZodType => {
+  let current = schema;
+
+  while (true) {
+    const def = current.def as ZodTypeDef;
+    if (def.type === "optional" || def.type === "nullable") {
+      current = def.innerType as z.ZodType;
+      continue;
+    }
+    if (def.type === "default" || def.type === "catch") {
+      current = def.innerType as z.ZodType;
+      continue;
+    }
+    if (def.type === "pipe") {
+      current = (def.out ?? def.innerType) as z.ZodType;
+      continue;
+    }
+    return current;
+  }
+};
+
+const isArrayLikeQueryField = (schema: z.ZodType): boolean => {
+  const unwrapped = unwrapQueryPropertySchema(schema);
+  return unwrapped.def.type === "array";
+};
+
+const queryShapeForEndpoint = (endpoint: AnyEndpoint): Record<string, z.ZodType> => {
+  const validator = endpoint.queryValidator as z.ZodType;
+  const validatorDef = validator.def as ZodTypeDef;
+
+  if (validatorDef.type !== "object" || validatorDef.shape === undefined) {
+    throw new Error(
+      "Query validator must be a top-level z.object(...) schema for this Endpoint",
+    );
+  }
+
+  return validatorDef.shape;
+};
+
+const getQuery = <E extends AnyEndpoint>(
+  endpoint: E,
+  honoCtx: Context,
+): QueryForEndpoint<E> => {
+  if (endpoint.queryValidator === undefined) {
+    return undefined as QueryForEndpoint<E>;
+  }
+
+  const decodedQuery: Record<string, string | string[]> = {};
+  const shape = queryShapeForEndpoint(endpoint);
+
+  Object.entries(shape).forEach(([key, schema]) => {
+    if (isArrayLikeQueryField(schema)) {
+      const values = honoCtx.req.queries(key);
+      if (values !== undefined) {
+        decodedQuery[key] = values;
+      }
+      return;
+    }
+
+    const value = honoCtx.req.query(key);
+    if (value !== undefined) {
+      decodedQuery[key] = value;
+    }
+  });
+
+  return endpoint.queryValidator.parse(decodedQuery) as QueryForEndpoint<E>;
+};
+
 const addGetHandler = <Path extends PathParts, Services>(
   app: Hono,
   endpoint: AnyEndpoint,
@@ -212,7 +288,8 @@ const addGetHandler = <Path extends PathParts, Services>(
 ) => {
   app.get(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
 
@@ -239,7 +316,8 @@ const addPostHandler = <Path extends PathParts, Services>(
 ) => {
   app.post(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
@@ -257,7 +335,8 @@ const addPutHandler = <Path extends PathParts, Services>(
 ) => {
   app.put(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
@@ -275,7 +354,8 @@ const addPatchHandler = <Path extends PathParts, Services>(
 ) => {
   app.patch(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
@@ -293,7 +373,8 @@ const addDeleteHandler = <Path extends PathParts, Services>(
 ) => {
   app.delete(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
