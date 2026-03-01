@@ -16,6 +16,7 @@ import {
   Multi,
   type OutputValidatorsForEndpoint,
   type QueryForEndpoint,
+  type QueryShape,
   type ResponseCode,
   type ResponsesForEndpoint,
 } from "../Endpoint";
@@ -204,28 +205,21 @@ const getBody = async <E extends AnyEndpoint>(
   }
 };
 
-type ZodTypeDef = {
-  type?: string;
-  shape?: Record<string, z.ZodType>;
-  innerType?: z.ZodType;
-  out?: z.ZodType;
-};
-
 const unwrapQueryPropertySchema = (schema: z.ZodType): z.ZodType => {
   let current = schema;
 
   while (true) {
-    const def = current.def as ZodTypeDef;
-    if (def.type === "optional" || def.type === "nullable") {
-      current = def.innerType as z.ZodType;
+    if (
+      current.type === "optional" ||
+      current.type === "nullable" ||
+      current.type === "default" ||
+      current.type === "catch"
+    ) {
+      current = current.unwrap();
       continue;
     }
-    if (def.type === "default" || def.type === "catch") {
-      current = def.innerType as z.ZodType;
-      continue;
-    }
-    if (def.type === "pipe") {
-      current = (def.out ?? def.innerType) as z.ZodType;
+    if (current.type === "pipe") {
+      current = current.def.out as z.ZodType;
       continue;
     }
     return current;
@@ -233,33 +227,19 @@ const unwrapQueryPropertySchema = (schema: z.ZodType): z.ZodType => {
 };
 
 const isArrayLikeQueryField = (schema: z.ZodType): boolean => {
-  const unwrapped = unwrapQueryPropertySchema(schema);
-  return unwrapped.def.type === "array";
-};
-
-const queryShapeForEndpoint = (endpoint: AnyEndpoint): Record<string, z.ZodType> => {
-  const validator = endpoint.queryValidator as z.ZodType;
-  const validatorDef = validator.def as ZodTypeDef;
-
-  if (validatorDef.type !== "object" || validatorDef.shape === undefined) {
-    throw new Error(
-      "Query validator must be a top-level z.object(...) schema for this Endpoint",
-    );
-  }
-
-  return validatorDef.shape;
+  return unwrapQueryPropertySchema(schema) instanceof z.ZodArray;
 };
 
 const getQuery = <E extends AnyEndpoint>(
   endpoint: E,
   honoCtx: Context,
 ): QueryForEndpoint<E> => {
-  if (endpoint.queryValidator === undefined) {
+  if (endpoint.queryShape === undefined) {
     return undefined as QueryForEndpoint<E>;
   }
 
   const decodedQuery: Record<string, string | string[]> = {};
-  const shape = queryShapeForEndpoint(endpoint);
+  const shape = endpoint.queryShape as QueryShape;
 
   Object.entries(shape).forEach(([key, schema]) => {
     if (isArrayLikeQueryField(schema)) {
@@ -276,7 +256,7 @@ const getQuery = <E extends AnyEndpoint>(
     }
   });
 
-  return endpoint.queryValidator.parse(decodedQuery) as QueryForEndpoint<E>;
+  return z.object(shape).parse(decodedQuery) as QueryForEndpoint<E>;
 };
 
 const addGetHandler = <Path extends PathParts, Services>(

@@ -25,13 +25,11 @@ const notFoundSchema = z.object({
 const tasksApi = {
   tasks: Endpoint.multi({
     GET: Endpoint.get()
-      .query(
-        z.object({
-          completed: z.enum(["true", "false"]).optional(),
-          tags: z.array(z.string()).optional(),
-          limit: z.coerce.number().optional(),
-        }),
-      )
+      .query({
+        completed: z.enum(["true", "false"]).optional(),
+        tags: z.array(z.string()).optional(),
+        limit: z.coerce.number().optional(),
+      })
       .output(200, z.array(taskSchema)),
     POST: Endpoint.post()
       .input(createTaskRequestSchema)

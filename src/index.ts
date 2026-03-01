@@ -15,4 +15,3 @@ export {
   type ResponsesForEndpoint,
 } from "./Endpoint";
 export { createHonoServer, type HonoHandlersFor } from "./servers/hono";
-export { accepted, noContent } from "./status-utils";

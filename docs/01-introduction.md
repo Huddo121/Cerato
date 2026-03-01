@@ -19,12 +19,10 @@ A single Endpoint can handle different HTTP Methods, while also having child rou
 const tasksApi = {
   tasks: Endpoint.multi({
     GET: Endpoint.get()
-      .query(
-        z.object({
-          completed: z.enum(["true", "false"]).optional(),
-          tags: z.array(z.string()).optional(),
-        })
-      )
+      .query({
+        completed: z.enum(["true", "false"]).optional(),
+        tags: z.array(z.string()).optional(),
+      })
       .output(200, z.array(taskSchema)),
     POST: Endpoint.post()
       .input(createTaskRequestSchema)

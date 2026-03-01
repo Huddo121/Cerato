@@ -37,8 +37,30 @@ type WithHeaderParamIfRequired<E extends AnyEndpoint> =
   RequiredHeadersForEndpoint<E> extends undefined
     ? {}
     : { headers: RequiredHeadersForEndpoint<E> };
+type QueryScalar = string | number | boolean;
+type SerializableQueryValue<T> = T extends QueryScalar
+  ? T
+  : T extends readonly (infer U)[]
+    ? SerializableQueryValue<Exclude<U, null | undefined>>[]
+    : never;
+type RequiredQueryKeys<T extends Record<string, unknown>> = {
+  [K in keyof T]-?: undefined extends T[K] ? never : K;
+}[keyof T];
+type OptionalQueryKeys<T extends Record<string, unknown>> = Exclude<
+  keyof T,
+  RequiredQueryKeys<T>
+>;
+type SerializableQueryObject<T extends Record<string, unknown>> = {
+  [K in RequiredQueryKeys<T>]: SerializableQueryValue<Exclude<T[K], null>>;
+} & {
+  [K in OptionalQueryKeys<T>]?: SerializableQueryValue<
+    Exclude<T[K], undefined | null>
+  >;
+};
 type WithQueryIfRequired<E extends AnyEndpoint> =
-  QueryForEndpoint<E> extends undefined ? {} : { query: QueryForEndpoint<E> };
+  QueryForEndpoint<E> extends Record<string, unknown>
+    ? { query: SerializableQueryObject<QueryForEndpoint<E>> }
+    : {};
 
 export type FetchClientInputs<
   E extends AnyEndpoint,
@@ -94,8 +116,6 @@ const pathHasParams = <P extends PathParts>(path: P) => {
   return result;
 };
 
-type QueryScalar = string | number | boolean;
-
 const isQueryScalar = (value: unknown): value is QueryScalar => {
   return (
     typeof value === "string" ||
@@ -104,8 +124,13 @@ const isQueryScalar = (value: unknown): value is QueryScalar => {
   );
 };
 
-const serializeQuery = (query: Record<string, unknown>): string => {
-  const params = new URLSearchParams();
+type QueryParamValue = QueryScalar | QueryScalar[] | undefined;
+
+const appendQueryToUrl = (
+  url: URL,
+  query: Record<string, QueryParamValue>,
+): void => {
+  url.search = "";
 
   Object.entries(query).forEach(([key, value]) => {
     if (value === undefined) {
@@ -126,7 +151,7 @@ const serializeQuery = (query: Record<string, unknown>): string => {
             `Query parameter '${key}' must be an array of primitive values`,
           );
         }
-        params.append(key, String(item));
+        url.searchParams.append(key, String(item));
       });
       return;
     }
@@ -137,10 +162,22 @@ const serializeQuery = (query: Record<string, unknown>): string => {
       );
     }
 
-    params.append(key, String(value));
+    url.searchParams.append(key, String(value));
   });
+};
 
-  return params.toString();
+const createRequestUrl = (
+  apiPath: string,
+  host?: string,
+  query?: Record<string, QueryParamValue>,
+): string => {
+  const url = new URL(apiPath, host ?? "http://cerato.local");
+
+  if (query !== undefined) {
+    appendQueryToUrl(url, query);
+  }
+
+  return host === undefined ? `${url.pathname}${url.search}` : url.toString();
 };
 
 const contentTypeHeaderForEndpoint = <E extends AnyEndpoint>(
@@ -168,7 +205,7 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   ): Promise<FetchClientResult<E>> => {
     const contentTypeHeader = contentTypeHeaderForEndpoint(endpoint);
 
-    const response = await fetch(`${host ?? ""}${apiPath}`, {
+    const response = await fetch(apiPath, {
       method: endpoint.allowedMethod,
       body,
       headers: {
@@ -217,12 +254,13 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
       path,
       ("pathParams" in input ? input.pathParams : {}) as PathParams,
     );
-    const queryString =
+    const apiPath = createRequestUrl(
+      resolvedPath,
+      host,
       "query" in input
-        ? serializeQuery(input.query as Record<string, unknown>)
-        : "";
-    const apiPath =
-      queryString.length > 0 ? `${resolvedPath}?${queryString}` : resolvedPath;
+        ? (input.query as Record<string, QueryParamValue>)
+        : undefined,
+    );
 
     let body: undefined | FormData | string;
     if ("body" in input) {
@@ -246,14 +284,14 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
   };
 
   const fetchWithoutInputs = async (): Promise<FetchClientResult<E>> => {
-    const apiPath = `/${path.join("/")}`;
+    const apiPath = createRequestUrl(`/${path.join("/")}`, host);
 
     return baseFetch(endpoint.allowedMethod, apiPath, undefined, undefined);
   };
 
   const hasInputs =
     endpoint.inputValidator !== undefined ||
-    endpoint.queryValidator !== undefined ||
+    endpoint.queryShape !== undefined ||
     pathHasParams(path) ||
     endpoint.requiredHeaders.length > 0;
 
