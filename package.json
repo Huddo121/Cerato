@@ -48,6 +48,8 @@
   "scripts": {
     "dev": "tsdown --watch",
     "build": "tsdown",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check": "biome check",
+    "typecheck": "tsc --noEmit"
   }
 }
