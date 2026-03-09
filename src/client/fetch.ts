@@ -14,8 +14,8 @@ import {
   type Methods,
   Multi,
   type OutputsForEndpoint,
-  type QueryForEndpoint,
   type OutputValidatorsForEndpoint,
+  type QueryForEndpoint,
 } from "../Endpoint";
 import { type AccumulatePathParams, resolvePath } from "../path-utils";
 import { type EmptyRecord, typedEntries } from "../type-utils";

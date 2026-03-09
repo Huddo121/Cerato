@@ -51,7 +51,7 @@ type TasksApi = typeof tasksApi;
 
 const tasksClient = createClientsFromApi(tasksApi);
 
-const tasksClientExample = async () => {
+const _tasksClientExample = async () => {
   const createTaskResponse = await tasksClient.tasks.POST({
     body: {
       title: "Buy groceries",
@@ -94,13 +94,13 @@ let tasks: Task[] = [
   },
 ];
 
-const taskHandlers: HonoHandlersFor<[], TasksApi, {}> = {
+const taskHandlers: HonoHandlersFor<[], TasksApi, unknown> = {
   tasks: {
     GET: async (ctx) => {
       console.log("Task query params", ctx.query);
       return [200, tasks];
     },
-    POST: async (ctx) => {
+    POST: async (_ctx) => {
       return [
         200,
         {
@@ -112,7 +112,7 @@ const taskHandlers: HonoHandlersFor<[], TasksApi, {}> = {
       ];
     },
     ":taskId": {
-      GET: async (ctx) => {
+      GET: async (_ctx) => {
         return [
           200,
           {
@@ -150,7 +150,7 @@ const taskHandlers: HonoHandlersFor<[], TasksApi, {}> = {
   },
 };
 
-const honoApp = createHonoServer(
+const _honoApp = createHonoServer(
   tasksApi,
   {
     ...taskHandlers,
