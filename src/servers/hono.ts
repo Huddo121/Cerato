@@ -143,8 +143,6 @@ export type HonoHandlersFor<
       ? HonoHandlersForAPI<Path, A, Services>
       : never;
 
-export type HonoConfiguration = {};
-
 const flattenPath = <P extends PathParts>(path: P): FlattenedPath<P> => {
   return `/${path.join("/")}` as FlattenedPath<P>;
 };

@@ -321,7 +321,7 @@ export class Endpoint<
   }
 }
 /** Utility type to extract the Output type of a zod parser */
-type ValuesOutputFor<T extends z.ZodType> =
+export type ValuesOutputFor<T extends z.ZodType> =
   T extends z.ZodType<infer Out> ? Out : never;
 
 export type AnyEndpoint = Endpoint<Methods, any, any, any, any>;

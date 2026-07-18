@@ -16,6 +16,7 @@ import {
   type OutputsForEndpoint,
   type OutputValidatorsForEndpoint,
   type QueryForEndpoint,
+  type ValuesOutputFor,
 } from "../Endpoint";
 import { type AccumulatePathParams, resolvePath } from "../path-utils";
 import { type EmptyRecord, type Prettify, typedEntries } from "../type-utils";
@@ -409,9 +410,6 @@ export const createClientsFromApi = <A extends API>(
   return Object.fromEntries(clientTree);
 };
 
-/** Utility type to extract the Output type of a zod parser */
-type ValuesOutputFor<T extends z.ZodType> =
-  T extends z.ZodType<infer Out> ? Out : never;
 type ResponseHandlers<E extends AnyEndpoint, R> = {
   [K in keyof OutputValidatorsForEndpoint<E>]: (
     body: ValuesOutputFor<OutputValidatorsForEndpoint<E>[K]>,
