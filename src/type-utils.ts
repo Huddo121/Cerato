@@ -22,12 +22,19 @@ export type Xor<A, B> = Union<Left<A, B>, Right<A, B>>;
 export type EmptyRecord = Record<string, never>;
 
 /**
+ * Collapses intersections (`A & B`, mapped-type unions) into a single object
+ * type. Purely cosmetic to the compiler, but it makes hover output readable for
+ * consumers and lets structural equality checks see a flat shape.
+ */
+export type Prettify<T> = { [K in keyof T]: T[K] } & {};
+
+/**
  * Remove undefined and null from a type
  */
 export type Defined<T> = Exclude<T, undefined | null>;
 
 /** Utility type to convert a record in to a disjunction of tuples */
-export type ToTuples<T> = { [K in keyof T]: [K, T[K]] }[keyof T];
+export type ToTuples<T> = { [K in keyof T]: readonly [K, T[K]] }[keyof T];
 export type ToDisjunctions<T extends Record<string, unknown>> = {
   [K in keyof T]: { [P in K]: T[P] };
 }[keyof T];

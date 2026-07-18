@@ -38,6 +38,7 @@
     "hono": "4.11.4",
     "tsdown": "0.20.0-beta.3",
     "typescript": "5.9.3",
+    "vitest": "4.0.18",
     "zod": "4.3.5"
   },
   "peerDependencies": {
@@ -46,6 +47,9 @@
   },
   "scripts": {
     "dev": "tsdown --watch",
-    "build": "tsdown"
+    "build": "tsdown",
+    "test": "vitest run",
+    "check": "biome check",
+    "typecheck": "tsc --noEmit"
   }
 }

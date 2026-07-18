@@ -2,7 +2,7 @@
 import { type Context, Hono } from "hono";
 import type { BlankEnv, BlankInput } from "hono/types";
 import type { RedirectStatusCode } from "hono/utils/http-status";
-import type { ZodType } from "zod";
+import z, { type ZodType } from "zod";
 import type { PathPart, PathParts } from "../api";
 import {
   type AnyEndpoint,
@@ -15,6 +15,8 @@ import {
   type InputForEndpoint,
   Multi,
   type OutputValidatorsForEndpoint,
+  type QueryForEndpoint,
+  type QueryShape,
   type ResponseCode,
   type ResponsesForEndpoint,
 } from "../Endpoint";
@@ -59,7 +61,10 @@ type HonoHandlerForEndpoint<
   Services,
 > = E extends Endpoint<infer _M, infer I, infer _O, infer _Q, infer _H>
   ? (
-      ctx: HandlerContext<BlankEnv, Path, E, Services> & { body: I },
+      ctx: HandlerContext<BlankEnv, Path, E, Services> & {
+        body: I;
+        query: QueryForEndpoint<E>;
+      },
     ) => Promise<ResponsesForEndpoint<E>>
   : never;
 
@@ -203,6 +208,52 @@ const getBody = async <E extends AnyEndpoint>(
   }
 };
 
+const isArrayLikeQueryField = (schema: unknown): boolean => {
+  if (schema instanceof z.ZodArray) return true;
+  if (schema instanceof z.ZodOptional)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodNullable)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodDefault)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodCatch)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodPipe)
+    return isArrayLikeQueryField(schema._zod.def.out);
+  return false;
+};
+
+const getQuery = <E extends AnyEndpoint>(
+  endpoint: E,
+  honoCtx: Context,
+): QueryForEndpoint<E> => {
+  if (endpoint.queryShape === undefined) {
+    // No query shape means QueryForEndpoint<E> is `never`; there is no value a
+    // handler can read, so `undefined` stands in via `unknown`.
+    return undefined as unknown as QueryForEndpoint<E>;
+  }
+
+  const decodedQuery: Record<string, string | string[]> = {};
+  const shape = endpoint.queryShape as QueryShape;
+
+  Object.entries(shape).forEach(([key, schema]) => {
+    if (isArrayLikeQueryField(schema)) {
+      const values = honoCtx.req.queries(key);
+      if (values !== undefined) {
+        decodedQuery[key] = values;
+      }
+      return;
+    }
+
+    const value = honoCtx.req.query(key);
+    if (value !== undefined) {
+      decodedQuery[key] = value;
+    }
+  });
+
+  return z.object(shape).parse(decodedQuery) as QueryForEndpoint<E>;
+};
+
 const addGetHandler = <Path extends PathParts, Services>(
   app: Hono,
   endpoint: AnyEndpoint,
@@ -212,7 +263,8 @@ const addGetHandler = <Path extends PathParts, Services>(
 ) => {
   app.get(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
 
@@ -239,7 +291,8 @@ const addPostHandler = <Path extends PathParts, Services>(
 ) => {
   app.post(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
@@ -257,7 +310,8 @@ const addPutHandler = <Path extends PathParts, Services>(
 ) => {
   app.put(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
@@ -275,7 +329,8 @@ const addPatchHandler = <Path extends PathParts, Services>(
 ) => {
   app.patch(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
@@ -293,7 +348,8 @@ const addDeleteHandler = <Path extends PathParts, Services>(
 ) => {
   app.delete(path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody };
+    const reqQuery = getQuery(endpoint, honoCtx);
+    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
     const outputValidator = endpoint.outputValidators?.[status];
