@@ -10,6 +10,7 @@ import {
   Endpoint,
   type EndpointMappingForMulti,
   type InputForEndpoint,
+  METHODS,
   type MethodForEndpoint,
   type Methods,
   Multi,
@@ -354,32 +355,14 @@ const createClientsForMulti = <M extends AnyMulti>(
   host?: string,
 ): ClientsForMulti<M> => {
   const mapping = multi.endpointMapping;
+  const byMethod = mapping as Partial<Record<Methods, AnyEndpoint>>;
   let clientObj = {};
 
-  if ("GET" in mapping) {
-    clientObj = { ...clientObj, ...createClient(basePath, mapping.GET, host) };
-  }
-
-  if ("POST" in mapping) {
-    clientObj = { ...clientObj, ...createClient(basePath, mapping.POST, host) };
-  }
-
-  if ("PUT" in mapping) {
-    clientObj = { ...clientObj, ...createClient(basePath, mapping.PUT, host) };
-  }
-
-  if ("PATCH" in mapping) {
-    clientObj = {
-      ...clientObj,
-      ...createClient(basePath, mapping.PATCH, host),
-    };
-  }
-
-  if ("DELETE" in mapping) {
-    clientObj = {
-      ...clientObj,
-      ...createClient(basePath, mapping.DELETE, host),
-    };
+  for (const method of METHODS) {
+    const endpoint = byMethod[method];
+    if (endpoint !== undefined) {
+      clientObj = { ...clientObj, ...createClient(basePath, endpoint, host) };
+    }
   }
 
   if ("children" in mapping) {

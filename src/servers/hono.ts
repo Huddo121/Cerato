@@ -14,6 +14,7 @@ import {
   type EndpointMappingForMulti,
   type InputForEndpoint,
   METHODS,
+  type Methods,
   Multi,
   type OutputValidatorsForEndpoint,
   type QueryForEndpoint,
@@ -323,25 +324,19 @@ const traverseApi = <Path extends PathParts, A extends API, Services>(
       >;
 
       const mapping = endpointOrApi.endpointMapping;
+      const endpointsByMethod = mapping as Partial<
+        Record<Methods, AnyEndpoint>
+      >;
+      const handlersByMethod = multiHandlers as Partial<
+        Record<Methods, HonoHandlerForEndpoint<Path, AnyEndpoint, Services>>
+      >;
 
-      if ("GET" in mapping && "GET" in multiHandlers) {
-        addHandler(app, mapping.GET, path, multiHandlers.GET, services);
-      }
-
-      if ("POST" in mapping && "POST" in multiHandlers) {
-        addHandler(app, mapping.POST, path, multiHandlers.POST, services);
-      }
-
-      if ("PUT" in mapping && "PUT" in multiHandlers) {
-        addHandler(app, mapping.PUT, path, multiHandlers.PUT, services);
-      }
-
-      if ("PATCH" in mapping && "PATCH" in multiHandlers) {
-        addHandler(app, mapping.PATCH, path, multiHandlers.PATCH, services);
-      }
-
-      if ("DELETE" in mapping && "DELETE" in multiHandlers) {
-        addHandler(app, mapping.DELETE, path, multiHandlers.DELETE, services);
+      for (const method of METHODS) {
+        const endpoint = endpointsByMethod[method];
+        const handler = handlersByMethod[method];
+        if (endpoint !== undefined && handler !== undefined) {
+          addHandler(app, endpoint, path, handler, services);
+        }
       }
 
       if ("children" in mapping) {
