@@ -228,7 +228,9 @@ const getQuery = <E extends AnyEndpoint>(
   honoCtx: Context,
 ): QueryForEndpoint<E> => {
   if (endpoint.queryShape === undefined) {
-    return undefined as QueryForEndpoint<E>;
+    // No query shape means QueryForEndpoint<E> is `never`; there is no value a
+    // handler can read, so `undefined` stands in via `unknown`.
+    return undefined as unknown as QueryForEndpoint<E>;
   }
 
   const decodedQuery: Record<string, string | string[]> = {};

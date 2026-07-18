@@ -18,7 +18,7 @@ import {
   type QueryForEndpoint,
 } from "../Endpoint";
 import { type AccumulatePathParams, resolvePath } from "../path-utils";
-import { type EmptyRecord, typedEntries } from "../type-utils";
+import { type EmptyRecord, type Prettify, typedEntries } from "../type-utils";
 
 type AsResponse<T extends Record<string, unknown>> = {
   [K in keyof T]: { status: K; responseBody: T[K] };
@@ -50,25 +50,34 @@ type OptionalQueryKeys<T extends Record<string, unknown>> = Exclude<
   keyof T,
   RequiredQueryKeys<T>
 >;
-type SerializableQueryObject<T extends Record<string, unknown>> = {
-  [K in RequiredQueryKeys<T>]: SerializableQueryValue<Exclude<T[K], null>>;
-} & {
-  [K in OptionalQueryKeys<T>]?: SerializableQueryValue<
-    Exclude<T[K], undefined | null>
-  >;
-};
+type SerializableQueryObject<T extends Record<string, unknown>> = Prettify<
+  {
+    [K in RequiredQueryKeys<T>]: SerializableQueryValue<Exclude<T[K], null>>;
+  } & {
+    [K in OptionalQueryKeys<T>]?: SerializableQueryValue<
+      Exclude<T[K], undefined | null>
+    >;
+  }
+>;
 type WithQueryIfRequired<E extends AnyEndpoint> =
-  QueryForEndpoint<E> extends Record<string, unknown>
-    ? { query: SerializableQueryObject<QueryForEndpoint<E>> }
-    : {};
+  // Endpoints without a query resolve QueryForEndpoint to `never`. The
+  // `[never]` wrapper stops that distributing into the Record branch (which
+  // `never` would otherwise satisfy), so no `query` key is required.
+  [QueryForEndpoint<E>] extends [never]
+    ? {}
+    : QueryForEndpoint<E> extends Record<string, unknown>
+      ? { query: SerializableQueryObject<QueryForEndpoint<E>> }
+      : {};
 
 export type FetchClientInputs<
   E extends AnyEndpoint,
   PathParams extends Record<string, string>,
-> = WithBodyIfRequired<E> &
-  WithPathParamsIfRequired<PathParams> &
-  WithHeaderParamIfRequired<E> &
-  WithQueryIfRequired<E>;
+> = Prettify<
+  WithBodyIfRequired<E> &
+    WithPathParamsIfRequired<PathParams> &
+    WithHeaderParamIfRequired<E> &
+    WithQueryIfRequired<E>
+>;
 
 export type ClientFunction<
   E extends AnyEndpoint,
@@ -268,7 +277,11 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
         body = JSON.stringify(input.body);
       } else if (endpoint.accepts === "multipart-form") {
         const form = new FormData();
-        Object.entries(input.body).forEach(([k, v]) => {
+        const formBody = input.body as Record<
+          string,
+          string | Blob | undefined
+        >;
+        Object.entries(formBody).forEach(([k, v]) => {
           if (v !== undefined) {
             form.set(k, v);
           }
@@ -279,7 +292,10 @@ export const createClient = <E extends AnyEndpoint, P extends PathParts>(
       }
     }
 
-    const headers = "headers" in input ? input.headers : undefined;
+    const headers =
+      "headers" in input
+        ? (input.headers as Record<string, string>)
+        : undefined;
     return baseFetch(endpoint.allowedMethod, apiPath, body, headers);
   };
 
