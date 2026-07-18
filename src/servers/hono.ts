@@ -59,9 +59,12 @@ type HonoHandlerForEndpoint<
   Path extends PathParts,
   E extends AnyEndpoint,
   Services,
-> = E extends Endpoint<infer _M, infer I, infer _O, infer Q, infer _H>
+> = E extends Endpoint<infer _M, infer I, infer _O, infer _Q, infer _H>
   ? (
-      ctx: HandlerContext<BlankEnv, Path, E, Services> & { body: I; query: Q },
+      ctx: HandlerContext<BlankEnv, Path, E, Services> & {
+        body: I;
+        query: QueryForEndpoint<E>;
+      },
     ) => Promise<ResponsesForEndpoint<E>>
   : never;
 
@@ -205,29 +208,19 @@ const getBody = async <E extends AnyEndpoint>(
   }
 };
 
-const unwrapQueryPropertySchema = (schema: z.ZodType): z.ZodType => {
-  let current = schema;
-
-  while (true) {
-    if (
-      current.type === "optional" ||
-      current.type === "nullable" ||
-      current.type === "default" ||
-      current.type === "catch"
-    ) {
-      current = current.unwrap();
-      continue;
-    }
-    if (current.type === "pipe") {
-      current = current.def.out as z.ZodType;
-      continue;
-    }
-    return current;
-  }
-};
-
-const isArrayLikeQueryField = (schema: z.ZodType): boolean => {
-  return unwrapQueryPropertySchema(schema) instanceof z.ZodArray;
+const isArrayLikeQueryField = (schema: unknown): boolean => {
+  if (schema instanceof z.ZodArray) return true;
+  if (schema instanceof z.ZodOptional)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodNullable)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodDefault)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodCatch)
+    return isArrayLikeQueryField(schema.unwrap());
+  if (schema instanceof z.ZodPipe)
+    return isArrayLikeQueryField(schema._zod.def.out);
+  return false;
 };
 
 const getQuery = <E extends AnyEndpoint>(

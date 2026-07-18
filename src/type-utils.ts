@@ -27,7 +27,7 @@ export type EmptyRecord = Record<string, never>;
 export type Defined<T> = Exclude<T, undefined | null>;
 
 /** Utility type to convert a record in to a disjunction of tuples */
-export type ToTuples<T> = { [K in keyof T]: [K, T[K]] }[keyof T];
+export type ToTuples<T> = { [K in keyof T]: readonly [K, T[K]] }[keyof T];
 export type ToDisjunctions<T extends Record<string, unknown>> = {
   [K in keyof T]: { [P in K]: T[P] };
 }[keyof T];

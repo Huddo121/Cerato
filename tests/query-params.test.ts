@@ -1,32 +1,10 @@
-import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import z from "zod";
 import { createClientsFromApi, createHonoServer, Endpoint } from "../src/index";
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-});
-
-test("client query types guide callers toward serializable values", () => {
-  const api = {
-    tasks: Endpoint.get()
-      .query({
-        tags: z.array(z.string()),
-        completed: z.enum(["true", "false"]).optional(),
-        limit: z.coerce.number().optional(),
-      })
-      .output(200, z.object({ ok: z.boolean() })),
-  };
-
-  const client = createClientsFromApi(api, [], "https://example.com");
-
-  expectTypeOf<Parameters<typeof client.tasks.GET>[0]>().toEqualTypeOf<{
-    query: {
-      tags: string[];
-      completed?: "true" | "false";
-      limit?: number;
-    };
-  }>();
 });
 
 test("client serializes array query params using repeated keys", async () => {

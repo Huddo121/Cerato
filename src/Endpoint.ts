@@ -340,7 +340,7 @@ export type QueryShapeForEndpoint<E extends AnyEndpoint> =
 export type QueryForEndpoint<E extends AnyEndpoint> =
   QueryShapeForEndpoint<E> extends QueryShape
     ? z.output<QuerySchema<QueryShapeForEndpoint<E>>>
-    : undefined;
+    : never;
 /** A mapping between the response status code and the validator of the expected response body */
 export type OutputValidatorsForEndpoint<E extends AnyEndpoint> =
   E extends Endpoint<any, any, infer O, any, any> ? O : never;
