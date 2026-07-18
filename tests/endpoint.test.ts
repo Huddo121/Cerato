@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, expectTypeOf, test } from "vitest";
 import z from "zod";
 import { Endpoint } from "../src/index";
 
@@ -37,4 +37,27 @@ test("switching method preserves the accepts setting at runtime", () => {
 
   expect(endpoint.allowedMethod).toBe("POST");
   expect(endpoint.accepts).toBe("multipart-form");
+});
+
+test("builder methods carry the accepts type parameter through", () => {
+  // Regression: get()/post()/input()/output()/header() used to drop the
+  // accepts type param, so a multipart endpoint would type as json after any
+  // further chaining even though the runtime value was preserved.
+  type AcceptsOf<E> =
+    E extends Endpoint<
+      infer _M,
+      infer _I,
+      infer _O,
+      infer _Q,
+      infer _H,
+      infer A
+    >
+      ? A
+      : never;
+
+  const endpoint = Endpoint.multipart()
+    .post()
+    .input(z.object({ f: z.string() }));
+
+  expectTypeOf<AcceptsOf<typeof endpoint>>().toEqualTypeOf<"multipart-form">();
 });
