@@ -1,10 +1,13 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: Want to infer the actual type at call sites, need top type */
 /** biome-ignore-all lint/complexity/noBannedTypes: I am doing some shenanigans */
 import z, { type ZodUndefined } from "zod";
-import type { PathPart, PathParts } from "./api";
+import type { PathPart, PathParts } from "./path-utils";
 import { type EmptyRecord, type ToTuples, typedEntries } from "./type-utils";
 
-export type Methods = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+/** The HTTP methods an endpoint can serve, and the single source of truth for
+ * iterating over them at runtime. */
+export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+export type Methods = (typeof METHODS)[number];
 
 export type NonContentfulResponseCode = 204;
 // TODO: When adding 204 Hono will be upset because that's not supposed to return content, need to protect from 204 in response
@@ -164,7 +167,7 @@ export class Endpoint<
     this.accepts = params.accepts ?? "json";
   }
 
-  method<M2 extends Methods>(method: M2): Endpoint<M2, I, O, Q, H> {
+  method<M2 extends Methods>(method: M2): Endpoint<M2, I, O, Q, H, A> {
     return this.clone({ method });
   }
 
@@ -172,7 +175,7 @@ export class Endpoint<
     return new Endpoint({ method: allowedMethods });
   }
 
-  get(): Endpoint<"GET", I, O, Q, H> {
+  get(): Endpoint<"GET", I, O, Q, H, A> {
     return this.clone({ method: "GET" });
   }
 
@@ -180,7 +183,7 @@ export class Endpoint<
     return new Endpoint({ method: "GET" });
   }
 
-  post(): Endpoint<"POST", I, O, Q, H> {
+  post(): Endpoint<"POST", I, O, Q, H, A> {
     return this.clone({ method: "POST" });
   }
 
@@ -188,7 +191,7 @@ export class Endpoint<
     return new Endpoint({ method: "POST" });
   }
 
-  put(): Endpoint<"PUT", I, O, Q, H> {
+  put(): Endpoint<"PUT", I, O, Q, H, A> {
     return this.clone({ method: "PUT" });
   }
 
@@ -196,7 +199,7 @@ export class Endpoint<
     return new Endpoint({ method: "PUT" });
   }
 
-  patch(): Endpoint<"PATCH", I, O, Q, H> {
+  patch(): Endpoint<"PATCH", I, O, Q, H, A> {
     return this.clone({ method: "PATCH" });
   }
 
@@ -204,7 +207,7 @@ export class Endpoint<
     return new Endpoint({ method: "PATCH" });
   }
 
-  delete(): Endpoint<"DELETE", I, O, Q, H> {
+  delete(): Endpoint<"DELETE", I, O, Q, H, A> {
     return this.clone({ method: "DELETE" });
   }
 
@@ -212,7 +215,7 @@ export class Endpoint<
     return new Endpoint({ method: "DELETE" });
   }
 
-  input<I2>(validator: z.ZodType<I2>): Endpoint<M, I2, O, Q, H> {
+  input<I2>(validator: z.ZodType<I2>): Endpoint<M, I2, O, Q, H, A> {
     return this.clone({ inputValidator: validator });
   }
 
@@ -229,7 +232,7 @@ export class Endpoint<
   output<C extends ResponseCode, Z extends z.ZodType = ZodUndefined>(
     code: C,
     validator?: Z,
-  ): Endpoint<M, I, AddOutput<O, C, Z>, Q, H> {
+  ): Endpoint<M, I, AddOutput<O, C, Z>, Q, H, A> {
     const updatedValidators = Object.assign({}, this.outputValidators ?? {}, {
       [code]: validator ?? z.undefined(),
     }) as AddOutput<O, C, Z>;
@@ -254,7 +257,7 @@ export class Endpoint<
 
   header<K extends string>(
     headerName: K,
-  ): Endpoint<M, I, O, Q, WithProperty<H, K, string>> {
+  ): Endpoint<M, I, O, Q, WithProperty<H, K, string>, A> {
     return this.clone({
       requiredHeaders: [
         ...(this.requiredHeaders as (keyof H)[]),
@@ -321,7 +324,7 @@ export class Endpoint<
   }
 }
 /** Utility type to extract the Output type of a zod parser */
-type ValuesOutputFor<T extends z.ZodType> =
+export type ValuesOutputFor<T extends z.ZodType> =
   T extends z.ZodType<infer Out> ? Out : never;
 
 export type AnyEndpoint = Endpoint<Methods, any, any, any, any>;

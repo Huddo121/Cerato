@@ -1,4 +1,3 @@
-export type { PathParts } from "./api";
 export {
   type ClientsForApi,
   createClientsFromApi,
@@ -14,4 +13,5 @@ export {
   type QueryForEndpoint,
   type ResponsesForEndpoint,
 } from "./Endpoint";
+export type { PathParts } from "./path-utils";
 export { createHonoServer, type HonoHandlersFor } from "./servers/hono";

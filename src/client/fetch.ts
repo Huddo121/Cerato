@@ -1,7 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: I'm doing some sinning in here */
 import type z from "zod";
 import type { ZodAny } from "zod";
-import type { PathParts } from "../api";
 import {
   type AnyEndpoint,
   type AnyMulti,
@@ -10,14 +9,20 @@ import {
   Endpoint,
   type EndpointMappingForMulti,
   type InputForEndpoint,
+  METHODS,
   type MethodForEndpoint,
   type Methods,
   Multi,
   type OutputsForEndpoint,
   type OutputValidatorsForEndpoint,
   type QueryForEndpoint,
+  type ValuesOutputFor,
 } from "../Endpoint";
-import { type AccumulatePathParams, resolvePath } from "../path-utils";
+import {
+  type AccumulatePathParams,
+  type PathParts,
+  resolvePath,
+} from "../path-utils";
 import { type EmptyRecord, type Prettify, typedEntries } from "../type-utils";
 
 type AsResponse<T extends Record<string, unknown>> = {
@@ -353,32 +358,14 @@ const createClientsForMulti = <M extends AnyMulti>(
   host?: string,
 ): ClientsForMulti<M> => {
   const mapping = multi.endpointMapping;
+  const byMethod = mapping as Partial<Record<Methods, AnyEndpoint>>;
   let clientObj = {};
 
-  if ("GET" in mapping) {
-    clientObj = { ...clientObj, ...createClient(basePath, mapping.GET, host) };
-  }
-
-  if ("POST" in mapping) {
-    clientObj = { ...clientObj, ...createClient(basePath, mapping.POST, host) };
-  }
-
-  if ("PUT" in mapping) {
-    clientObj = { ...clientObj, ...createClient(basePath, mapping.PUT, host) };
-  }
-
-  if ("PATCH" in mapping) {
-    clientObj = {
-      ...clientObj,
-      ...createClient(basePath, mapping.PATCH, host),
-    };
-  }
-
-  if ("DELETE" in mapping) {
-    clientObj = {
-      ...clientObj,
-      ...createClient(basePath, mapping.DELETE, host),
-    };
+  for (const method of METHODS) {
+    const endpoint = byMethod[method];
+    if (endpoint !== undefined) {
+      clientObj = { ...clientObj, ...createClient(basePath, endpoint, host) };
+    }
   }
 
   if ("children" in mapping) {
@@ -409,9 +396,6 @@ export const createClientsFromApi = <A extends API>(
   return Object.fromEntries(clientTree);
 };
 
-/** Utility type to extract the Output type of a zod parser */
-type ValuesOutputFor<T extends z.ZodType> =
-  T extends z.ZodType<infer Out> ? Out : never;
 type ResponseHandlers<E extends AnyEndpoint, R> = {
   [K in keyof OutputValidatorsForEndpoint<E>]: (
     body: ValuesOutputFor<OutputValidatorsForEndpoint<E>[K]>,

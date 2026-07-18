@@ -1,5 +1,8 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: EmptyRecord doesn't work in these cases */
-import type { PathParts } from "./api";
+
+/** A single segment of a path; a literal like `tasks` or a `:param` placeholder */
+export type PathPart = `${string}` | `:${string}`;
+export type PathParts = readonly PathPart[];
 
 // Extract path parameters from a string key
 export type ExtractPathParams<K extends string> = K extends `:${infer Param}`

@@ -3,7 +3,6 @@ import { type Context, Hono } from "hono";
 import type { BlankEnv, BlankInput } from "hono/types";
 import type { RedirectStatusCode } from "hono/utils/http-status";
 import z, { type ZodType } from "zod";
-import type { PathPart, PathParts } from "../api";
 import {
   type AnyEndpoint,
   type AnyEndpointMapping,
@@ -13,6 +12,8 @@ import {
   Endpoint,
   type EndpointMappingForMulti,
   type InputForEndpoint,
+  METHODS,
+  type Methods,
   Multi,
   type OutputValidatorsForEndpoint,
   type QueryForEndpoint,
@@ -20,6 +21,7 @@ import {
   type ResponseCode,
   type ResponsesForEndpoint,
 } from "../Endpoint";
+import type { PathPart, PathParts } from "../path-utils";
 import { isNonContentfulResponseCode } from "../status-utils";
 import { typedEntries } from "../type-utils";
 
@@ -143,8 +145,6 @@ export type HonoHandlersFor<
       ? HonoHandlersForAPI<Path, A, Services>
       : never;
 
-export type HonoConfiguration = {};
-
 const flattenPath = <P extends PathParts>(path: P): FlattenedPath<P> => {
   return `/${path.join("/")}` as FlattenedPath<P>;
 };
@@ -254,22 +254,33 @@ const getQuery = <E extends AnyEndpoint>(
   return z.object(shape).parse(decodedQuery) as QueryForEndpoint<E>;
 };
 
-const addGetHandler = <Path extends PathParts, Services>(
+const isRedirectStatus = (status: ResponseCode): boolean =>
+  status >= 300 && status <= 399;
+
+const addHandler = <Path extends PathParts, Services>(
   app: Hono,
   endpoint: AnyEndpoint,
   path: string,
   handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
   services: Services,
 ) => {
-  app.get(path, async (honoCtx) => {
+  const method = endpoint.allowedMethod;
+  if (!(METHODS as readonly string[]).includes(method)) {
+    throw new Error(
+      `Attempting to construct a Hono server with an invalid method; ${method} ${path}`,
+    );
+  }
+
+  app.on(method, path, async (honoCtx) => {
     const reqBody = await getBody(endpoint, honoCtx);
     const reqQuery = getQuery(endpoint, honoCtx);
     const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
     const [status, responseBody] = await handle(ctx);
     const statusCode = Number(status) as ResponseCode;
 
-    // This is dodgy, I should switch away from tuples
-    if (statusCode >= 300 && statusCode <= 399) {
+    // Tuples are a blunt instrument for responses: a 3xx code carries the
+    // redirect target as its "body" rather than something to JSON-encode.
+    if (isRedirectStatus(statusCode)) {
       return honoCtx.redirect(
         responseBody as string,
         statusCode as RedirectStatusCode,
@@ -280,106 +291,6 @@ const addGetHandler = <Path extends PathParts, Services>(
 
     return respond(honoCtx, statusCode, responseBody, outputValidator);
   });
-};
-
-const addPostHandler = <Path extends PathParts, Services>(
-  app: Hono,
-  endpoint: AnyEndpoint,
-  path: string,
-  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
-  services: Services,
-) => {
-  app.post(path, async (honoCtx) => {
-    const reqBody = await getBody(endpoint, honoCtx);
-    const reqQuery = getQuery(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
-    const [status, responseBody] = await handle(ctx);
-    const statusCode = Number(status) as ResponseCode;
-    const outputValidator = endpoint.outputValidators?.[status];
-
-    return respond(honoCtx, statusCode, responseBody, outputValidator);
-  });
-};
-
-const addPutHandler = <Path extends PathParts, Services>(
-  app: Hono,
-  endpoint: AnyEndpoint,
-  path: string,
-  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
-  services: Services,
-) => {
-  app.put(path, async (honoCtx) => {
-    const reqBody = await getBody(endpoint, honoCtx);
-    const reqQuery = getQuery(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
-    const [status, responseBody] = await handle(ctx);
-    const statusCode = Number(status) as ResponseCode;
-    const outputValidator = endpoint.outputValidators?.[status];
-
-    return respond(honoCtx, statusCode, responseBody, outputValidator);
-  });
-};
-
-const addPatchHandler = <Path extends PathParts, Services>(
-  app: Hono,
-  endpoint: AnyEndpoint,
-  path: string,
-  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
-  services: Services,
-) => {
-  app.patch(path, async (honoCtx) => {
-    const reqBody = await getBody(endpoint, honoCtx);
-    const reqQuery = getQuery(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
-    const [status, responseBody] = await handle(ctx);
-    const statusCode = Number(status) as ResponseCode;
-    const outputValidator = endpoint.outputValidators?.[status];
-
-    return respond(honoCtx, statusCode, responseBody, outputValidator);
-  });
-};
-
-const addDeleteHandler = <Path extends PathParts, Services>(
-  app: Hono,
-  endpoint: AnyEndpoint,
-  path: string,
-  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
-  services: Services,
-) => {
-  app.delete(path, async (honoCtx) => {
-    const reqBody = await getBody(endpoint, honoCtx);
-    const reqQuery = getQuery(endpoint, honoCtx);
-    const ctx = { hono: honoCtx, services, body: reqBody, query: reqQuery };
-    const [status, responseBody] = await handle(ctx);
-    const statusCode = Number(status) as ResponseCode;
-    const outputValidator = endpoint.outputValidators?.[status];
-
-    return respond(honoCtx, statusCode, responseBody, outputValidator);
-  });
-};
-
-const addHandler = <Path extends PathParts, Services>(
-  app: Hono,
-  endpoint: AnyEndpoint,
-  path: string,
-  handle: HonoHandlerForEndpoint<Path, AnyEndpoint, Services>,
-  services: Services,
-) => {
-  if (endpoint.allowedMethod === "GET") {
-    addGetHandler(app, endpoint, path, handle, services);
-  } else if (endpoint.allowedMethod === "POST") {
-    addPostHandler(app, endpoint, path, handle, services);
-  } else if (endpoint.allowedMethod === "PUT") {
-    addPutHandler(app, endpoint, path, handle, services);
-  } else if (endpoint.allowedMethod === "PATCH") {
-    addPatchHandler(app, endpoint, path, handle, services);
-  } else if (endpoint.allowedMethod === "DELETE") {
-    addDeleteHandler(app, endpoint, path, handle, services);
-  } else {
-    throw new Error(
-      `Attempting to construct a Hono server with an invalid method; ${endpoint.allowedMethod} ${path}`,
-    );
-  }
 };
 
 /** Visit all the parts of an API and add the appropriate routes to the Hono App */
@@ -413,25 +324,19 @@ const traverseApi = <Path extends PathParts, A extends API, Services>(
       >;
 
       const mapping = endpointOrApi.endpointMapping;
+      const endpointsByMethod = mapping as Partial<
+        Record<Methods, AnyEndpoint>
+      >;
+      const handlersByMethod = multiHandlers as Partial<
+        Record<Methods, HonoHandlerForEndpoint<Path, AnyEndpoint, Services>>
+      >;
 
-      if ("GET" in mapping && "GET" in multiHandlers) {
-        addHandler(app, mapping.GET, path, multiHandlers.GET, services);
-      }
-
-      if ("POST" in mapping && "POST" in multiHandlers) {
-        addHandler(app, mapping.POST, path, multiHandlers.POST, services);
-      }
-
-      if ("PUT" in mapping && "PUT" in multiHandlers) {
-        addHandler(app, mapping.PUT, path, multiHandlers.PUT, services);
-      }
-
-      if ("PATCH" in mapping && "PATCH" in multiHandlers) {
-        addHandler(app, mapping.PATCH, path, multiHandlers.PATCH, services);
-      }
-
-      if ("DELETE" in mapping && "DELETE" in multiHandlers) {
-        addHandler(app, mapping.DELETE, path, multiHandlers.DELETE, services);
+      for (const method of METHODS) {
+        const endpoint = endpointsByMethod[method];
+        const handler = handlersByMethod[method];
+        if (endpoint !== undefined && handler !== undefined) {
+          addHandler(app, endpoint, path, handler, services);
+        }
       }
 
       if ("children" in mapping) {
