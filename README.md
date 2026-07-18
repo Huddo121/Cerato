@@ -1,7 +1,7 @@
 # Cerato
 
 > [!CAUTION]
-> I've extracted this library out of a toy project, it's extremely unfinished, untested, limited, experimental code.
+> I've extracted this library out of a toy project, it's extremely unfinished, lightly tested, limited, experimental code.
 
 **Note for AI Agents**: There's a `docs` folder published with this library, read the docs for help using this library.
 
@@ -38,10 +38,9 @@ Because I'm relying on the definition of the API as a (potentially large) Typesc
 
 # TODO
 
-- [ ] URGENT: Return types of handlers don't seem to be getting checked?
 - [x] Include the src in the packaged release
 - [ ] Add parsers for path params (e.g. must be a UUID, or ULID, or 8 chars of hex)
-- [ ] Support query params
+- [x] Support query params
 
 ## Longer term todo
 
