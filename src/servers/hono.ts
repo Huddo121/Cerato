@@ -3,7 +3,6 @@ import { type Context, Hono } from "hono";
 import type { BlankEnv, BlankInput } from "hono/types";
 import type { RedirectStatusCode } from "hono/utils/http-status";
 import z, { type ZodType } from "zod";
-import type { PathPart, PathParts } from "../api";
 import {
   type AnyEndpoint,
   type AnyEndpointMapping,
@@ -22,6 +21,7 @@ import {
   type ResponseCode,
   type ResponsesForEndpoint,
 } from "../Endpoint";
+import type { PathPart, PathParts } from "../path-utils";
 import { isNonContentfulResponseCode } from "../status-utils";
 import { typedEntries } from "../type-utils";
 

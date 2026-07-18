@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: Want to infer the actual type at call sites, need top type */
 /** biome-ignore-all lint/complexity/noBannedTypes: I am doing some shenanigans */
 import z, { type ZodUndefined } from "zod";
-import type { PathPart, PathParts } from "./api";
+import type { PathPart, PathParts } from "./path-utils";
 import { type EmptyRecord, type ToTuples, typedEntries } from "./type-utils";
 
 /** The HTTP methods an endpoint can serve, and the single source of truth for

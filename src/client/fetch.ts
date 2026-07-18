@@ -1,7 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: I'm doing some sinning in here */
 import type z from "zod";
 import type { ZodAny } from "zod";
-import type { PathParts } from "../api";
 import {
   type AnyEndpoint,
   type AnyMulti,
@@ -19,7 +18,11 @@ import {
   type QueryForEndpoint,
   type ValuesOutputFor,
 } from "../Endpoint";
-import { type AccumulatePathParams, resolvePath } from "../path-utils";
+import {
+  type AccumulatePathParams,
+  type PathParts,
+  resolvePath,
+} from "../path-utils";
 import { type EmptyRecord, type Prettify, typedEntries } from "../type-utils";
 
 type AsResponse<T extends Record<string, unknown>> = {
