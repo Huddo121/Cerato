@@ -15,6 +15,9 @@ const api = {
     .output(200, z.object({ modified: z.string() })),
   remove: Endpoint.delete().output(200, z.object({ deleted: z.boolean() })),
   old: Endpoint.get().output(301, z.string()),
+  submitAndRedirect: Endpoint.post()
+    .input(z.object({ name: z.string() }))
+    .output(302, z.string()),
 };
 type Api = typeof api;
 
@@ -25,6 +28,7 @@ const handlers: HonoHandlersFor<[], Api, unknown> = {
   modify: async (ctx) => [200, { modified: ctx.body.name }],
   remove: async () => [200, { deleted: true }],
   old: async () => [301, "/api/ping"],
+  submitAndRedirect: async () => [302, "/api/ping"],
 };
 
 const app = createHonoServer(api, handlers, {});
@@ -77,5 +81,16 @@ test("a GET handler returning a 3xx code issues a redirect", async () => {
   const response = await app.request("/api/old");
 
   expect(response.status).toBe(301);
+  expect(response.headers.get("location")).toBe("/api/ping");
+});
+
+test("a non-GET handler returning a 3xx code also issues a redirect", async () => {
+  // Regression: redirect handling used to live only in the GET handler, so a
+  // 3xx from POST/PUT/etc. fell through to JSON encoding and failed.
+  const response = await jsonRequest("/api/submitAndRedirect", "POST", {
+    name: "widget",
+  });
+
+  expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe("/api/ping");
 });

@@ -4,7 +4,10 @@ import z, { type ZodUndefined } from "zod";
 import type { PathPart, PathParts } from "./api";
 import { type EmptyRecord, type ToTuples, typedEntries } from "./type-utils";
 
-export type Methods = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+/** The HTTP methods an endpoint can serve, and the single source of truth for
+ * iterating over them at runtime. */
+export const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+export type Methods = (typeof METHODS)[number];
 
 export type NonContentfulResponseCode = 204;
 // TODO: When adding 204 Hono will be upset because that's not supposed to return content, need to protect from 204 in response
