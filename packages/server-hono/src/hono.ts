@@ -58,13 +58,15 @@ type HonoInput<E extends AnyEndpoint> = {
   outputFormat: "json";
 };
 
-// `Env` is threaded through the whole handler tree so a handler can read the
-// Hono context variables that server-owned middleware set upstream (e.g. an
-// authenticated identity) as a *typed* value rather than through a cast. It
-// defaults to `BlankEnv`, so an API served without such middleware — the common
-// case — keeps its existing, un-annotated handler signatures. Auth itself stays
-// server-owned and out of the contract; this is only the plumbing that carries
-// its result to the handler with types intact.
+/**
+ * `Env` is threaded through the whole handler tree so a handler can read the
+ * Hono context variables that server-owned middleware set upstream (e.g. an
+ * authenticated identity) as a *typed* value rather than through a cast. It
+ * defaults to `BlankEnv`, so an API served without such middleware — the common
+ * case — keeps its existing, un-annotated handler signatures. Auth itself stays
+ * server-owned and out of the contract; this is only the plumbing that carries
+ * its result to the handler with types intact.
+ */
 type HonoHandlerForEndpoint<
   Path extends PathParts,
   E extends AnyEndpoint,
