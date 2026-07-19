@@ -1,0 +1,19 @@
+{
+  "name": "@cerato/examples",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cerato/client-fetch": "workspace:*",
+    "@cerato/server-hono": "workspace:*",
+    "cerato": "workspace:*",
+    "zod": "4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "25.0.9",
+    "typescript": "5.9.3"
+  }
+}

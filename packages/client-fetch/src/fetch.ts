@@ -1,11 +1,12 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: I'm doing some sinning in here */
-import type z from "zod";
-import type { ZodAny } from "zod";
+
 import {
+  type AccumulatePathParams,
   type AnyEndpoint,
   type AnyMulti,
   type API,
   type ChildrenForMulti,
+  type EmptyRecord,
   Endpoint,
   type EndpointMappingForMulti,
   type InputForEndpoint,
@@ -15,15 +16,15 @@ import {
   Multi,
   type OutputsForEndpoint,
   type OutputValidatorsForEndpoint,
-  type QueryForEndpoint,
-  type ValuesOutputFor,
-} from "../Endpoint";
-import {
-  type AccumulatePathParams,
   type PathParts,
+  type Prettify,
+  type QueryForEndpoint,
   resolvePath,
-} from "../path-utils";
-import { type EmptyRecord, type Prettify, typedEntries } from "../type-utils";
+  typedEntries,
+  type ValuesOutputFor,
+} from "cerato/internal";
+import type z from "zod";
+import type { ZodAny } from "zod";
 
 type AsResponse<T extends Record<string, unknown>> = {
   [K in keyof T]: { status: K; responseBody: T[K] };

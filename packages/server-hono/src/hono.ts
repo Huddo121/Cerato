@@ -1,8 +1,6 @@
 /** biome-ignore-all lint/complexity/noBannedTypes: Some empty-record needs that aren't met by using Record<string, never> */
-import { type Context, Hono } from "hono";
-import type { BlankEnv, BlankInput } from "hono/types";
-import type { RedirectStatusCode } from "hono/utils/http-status";
-import z, { type ZodType } from "zod";
+
+import type { PathPart, PathParts } from "cerato/internal";
 import {
   type AnyEndpoint,
   type AnyEndpointMapping,
@@ -12,6 +10,7 @@ import {
   Endpoint,
   type EndpointMappingForMulti,
   type InputForEndpoint,
+  isNonContentfulResponseCode,
   METHODS,
   type Methods,
   Multi,
@@ -20,10 +19,12 @@ import {
   type QueryShape,
   type ResponseCode,
   type ResponsesForEndpoint,
-} from "../Endpoint";
-import type { PathPart, PathParts } from "../path-utils";
-import { isNonContentfulResponseCode } from "../status-utils";
-import { typedEntries } from "../type-utils";
+  typedEntries,
+} from "cerato/internal";
+import { type Context, Hono } from "hono";
+import type { BlankEnv, BlankInput } from "hono/types";
+import type { RedirectStatusCode } from "hono/utils/http-status";
+import z, { type ZodType } from "zod";
 
 type FlattenedPath<P extends PathParts> = P extends readonly [
   infer PH,

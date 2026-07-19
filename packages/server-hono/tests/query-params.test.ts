@@ -1,6 +1,8 @@
+import { createClientsFromApi } from "@cerato/client-fetch";
+import { Endpoint } from "cerato";
 import { afterEach, expect, expectTypeOf, test, vi } from "vitest";
 import z from "zod";
-import { createClientsFromApi, createHonoServer, Endpoint } from "../src/index";
+import { createHonoServer } from "../src/index";
 
 afterEach(() => {
   vi.restoreAllMocks();

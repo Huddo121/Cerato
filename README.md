@@ -22,6 +22,20 @@ To provide type safety all the information that defines the API must be present 
 
 Because there are no runtime types in Typescript, I use Zod to help verify any information coming "in" to achieve some measure of actual safety.
 
+## Packages
+
+Cerato is a pnpm monorepo split so that consumers only pull in what they use — a frontend taking the fetch client doesn't get a transitive dependency on Hono.
+
+| Package | Purpose | Depends on |
+| --- | --- | --- |
+| [`cerato`](./packages/core) | Core: define APIs (`Endpoint`), plus the shared building blocks under the `cerato/internal` entry that the adapters build against | `zod` (peer) |
+| [`@cerato/client-fetch`](./packages/client-fetch) | Derive a fetch-based client from an API definition | `cerato`, `zod` (peers) |
+| [`@cerato/server-hono`](./packages/server-hono) | Serve an API definition with [Hono](https://hono.dev/) | `cerato`, `zod`, `hono` (peers) |
+
+Each adapter takes `cerato` as an exact-in-`0.0.x` peer dependency (`^0.0.5`), so a consumer resolves a single shared copy of core — which matters because the adapters use `instanceof` against core's `Endpoint`/`Multi` classes, and two copies would silently fail to recognise each other's endpoints.
+
+`packages/core/src/internal.ts` is the shared surface the adapters import from (`cerato/internal`); the default `cerato` entry stays a small, curated API for end users.
+
 ## Challenges
 
 Because I'm relying on the definition of the API as a (potentially large) Typescript value and relying on a lot of type manipulation to infer the types of things like Hono handlers, the type errors can sometimes be horrific.
@@ -32,7 +46,7 @@ Because I'm relying on the definition of the API as a (potentially large) Typesc
 2. No support for non-json ~~request and~~ response bodies
 3. Modeling responses as a tuple of `[ResponseCode, ResponseBody]` "works" but I don't love it and I do some really horrible stuff when it comes to dealing with redirects
 4. Go-to-reference sometimes takes you to library code rather than the API definition
-5. Splitting out the different interpretation targets to supporting libraries to keep core library size down
+5. ~~Splitting out the different interpretation targets to supporting libraries to keep core library size down~~ — done, see [Packages](#packages)
 6. No transformation of formatted data yet, [Zod codecs](https://zod.dev/codecs) are probably the answer here
 7. The type ascription when you're splitting up routes with path params are awful at the moment, some type util would make this nicer
 

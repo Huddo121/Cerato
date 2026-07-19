@@ -5,9 +5,9 @@
 // carried an "URGENT: return types of handlers don't seem to be getting
 // checked?" note; this file pins that the guarantee actually holds, so a
 // regression fails the typecheck rather than silently shipping.
+import { Endpoint } from "cerato";
 import z from "zod";
-import { Endpoint } from "../src/Endpoint";
-import type { HonoHandlersFor } from "../src/servers/hono";
+import type { HonoHandlersFor } from "../src/index";
 
 const taskSchema = z.object({ id: z.string(), title: z.string() });
 
