@@ -1,6 +1,7 @@
+import { Endpoint } from "cerato";
 import { expect, test } from "vitest";
 import z from "zod";
-import { createHonoServer, Endpoint, type HonoHandlersFor } from "../src/index";
+import { createHonoServer, type HonoHandlersFor } from "../src/index";
 
 const api = {
   ping: Endpoint.get().output(200, z.object({ ok: z.boolean() })),

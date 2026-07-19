@@ -1,7 +1,7 @@
+import { createClientsFromApi } from "@cerato/client-fetch";
+import { createHonoServer, type HonoHandlersFor } from "@cerato/server-hono";
+import { Endpoint } from "cerato";
 import z from "zod";
-import { createClientsFromApi } from "../client/fetch";
-import { Endpoint } from "../Endpoint";
-import { createHonoServer, type HonoHandlersFor } from "../servers/hono";
 
 const taskSchema = z.object({
   id: z.string(),
