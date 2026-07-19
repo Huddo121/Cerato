@@ -1,0 +1,42 @@
+name: Version
+
+# Manual-only: turns pending changesets into a "Version Packages" pull request
+# that bumps versions and updates changelogs. It never publishes — merging that
+# PR is what applies the release; publishing is the separate Release workflow.
+# Start it from the Actions tab ("Run workflow"). Running it with no pending
+# changesets is a no-op.
+on:
+  workflow_dispatch:
+
+concurrency: version-${{ github.ref }}
+
+permissions:
+  contents: write # push the Version Packages PR branch
+  pull-requests: write # open/update the Version Packages PR
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from the "packageManager" field in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Open or update the Version Packages PR
+        uses: changesets/action@v1
+        with:
+          # Only `version` is set, so the action can only ever open/update the
+          # PR — it has no publish path.
+          version: pnpm changeset version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

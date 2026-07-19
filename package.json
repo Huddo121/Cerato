@@ -11,7 +11,7 @@
     "type": "git",
     "url": "git+https://github.com/Huddo121/Cerato.git"
   },
-  "packageManager": "pnpm@10.8.0",
+  "packageManager": "pnpm@11.15.1",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
