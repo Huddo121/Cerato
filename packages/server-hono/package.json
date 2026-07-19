@@ -1,6 +1,6 @@
 {
   "name": "@cerato/server-hono",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Hono server adapter for Cerato APIs",
   "keywords": [],
   "license": "MIT",
@@ -41,7 +41,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "cerato": "^0.0.5",
+    "cerato": "^0.0.6",
     "hono": "^4.0.0",
     "zod": "^4.1.0"
   },
