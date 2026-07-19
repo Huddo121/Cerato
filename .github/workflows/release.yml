@@ -1,52 +1,64 @@
 name: Release
 
-# Manual-only: this workflow never runs on push. Start it from the Actions
-# tab ("Run workflow"). It has two modes, decided by changesets/action:
-#   - changesets pending      -> opens/updates the "Version Packages" PR
-#   - no changesets (PR merged) -> builds and publishes to npm via OIDC
-# So a release is: dispatch to prep the Version PR, review + merge it, then
-# dispatch again to publish.
+# Manual-only: builds and publishes the current package versions to npm via
+# pnpm's native OIDC trusted publishing. It ONLY publishes — it never opens a
+# version PR. Run it after the Version workflow's "Version Packages" PR has been
+# merged into the base branch. Start it from the Actions tab ("Run workflow").
+#
+# The filename (release.yml) and the `release` environment below are both part
+# of npm's trusted-publisher configuration, so keep them stable.
 on:
   workflow_dispatch:
 
 concurrency: release-${{ github.ref }}
 
 permissions:
-  contents: write # push the Version Packages PR branch / tags
-  pull-requests: write # open/update the Version Packages PR
+  contents: write # push git tags and create GitHub releases
+  pull-requests: write # changesets/action reads the PR API on the publish path
   id-token: write # mint the OIDC token for trusted publishing
 
 jobs:
   release:
     runs-on: ubuntu-latest
-    # Ties this job to the protected `release` environment. Its required
-    # reviewer is the publish gate, and npm checks this name in the OIDC claim.
+    # The protected `release` environment's required reviewer is the publish
+    # gate, and npm matches this environment name in the OIDC trusted-publisher
+    # claim.
     environment: release
 
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm version comes from the "packageManager" field in package.json.
+      # pnpm >= 11.3 authenticates to npm via OIDC natively — no npm CLI needed,
+      # which is what the previous combined workflow tripped over.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10.8.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22 # >= 22.14, required for OIDC trusted publishing
           cache: pnpm
-          registry-url: "https://registry.npmjs.org"
 
-      # Trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
-      - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+      # Keeps this workflow single-purpose: publishing only, never versioning.
+      # Pending changesets mean the Version PR has not been merged yet, so fail
+      # loudly rather than letting changesets/action fall back to opening a PR.
+      - name: Fail if changesets are still pending
+        run: |
+          pending=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md')
+          if [ -n "$pending" ]; then
+            echo "::error::Pending changesets found — run the Version workflow and merge its PR before releasing:"
+            echo "$pending"
+            exit 1
+          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Create release PR or publish
+      - name: Publish to npm
         uses: changesets/action@v1
         with:
-          version: pnpm changeset version
+          # Only `publish` is set (no `version`); combined with the guard above,
+          # this can only publish. It also pushes the git tags and creates the
+          # GitHub releases for the published versions.
           publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

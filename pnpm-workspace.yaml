@@ -2,5 +2,8 @@ packages:
   - packages/*
   - examples
 
-onlyBuiltDependencies:
-  - esbuild
+# esbuild installs a prebuilt binary via an install script. Allow it to run
+# (pnpm 11 replaced the old `onlyBuiltDependencies` allowlist with this explicit
+# per-dependency decision).
+allowBuilds:
+  esbuild: true
