@@ -1,0 +1,53 @@
+name: Release
+
+# Manual-only: this workflow never runs on push. Start it from the Actions
+# tab ("Run workflow"). It has two modes, decided by changesets/action:
+#   - changesets pending      -> opens/updates the "Version Packages" PR
+#   - no changesets (PR merged) -> builds and publishes to npm via OIDC
+# So a release is: dispatch to prep the Version PR, review + merge it, then
+# dispatch again to publish.
+on:
+  workflow_dispatch:
+
+concurrency: release-${{ github.ref }}
+
+permissions:
+  contents: write # push the Version Packages PR branch / tags
+  pull-requests: write # open/update the Version Packages PR
+  id-token: write # mint the OIDC token for trusted publishing
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Ties this job to the protected `release` environment. Its required
+    # reviewer is the publish gate, and npm checks this name in the OIDC claim.
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.8.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create release PR or publish
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          publish: pnpm release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No NPM_TOKEN: publish authenticates via OIDC trusted publishing.
