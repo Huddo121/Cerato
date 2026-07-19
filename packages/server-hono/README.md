@@ -36,4 +36,33 @@ const app = createHonoServer(api, handlers, {});
 const response = await app.request("/api/ping");
 ```
 
+## Reading server-owned middleware context
+
+Cross-cutting concerns like auth stay outside the contract, as ordinary Hono
+middleware on a parent app. Pass that middleware's `Env` as the final type
+argument and handlers read the values it set with full typing, rather than
+casting `ctx.hono`:
+
+```ts
+type Identity = { readonly principalId: string };
+type AuthEnv = { Variables: { identity: Identity } };
+
+const handlers: HonoHandlersFor<[], Api, unknown, AuthEnv> = {
+  ping: async (ctx) => {
+    const identity = ctx.hono.get("identity"); // typed as Identity
+    return [200, { ok: identity.principalId.length > 0 }];
+  },
+};
+
+const contract = createHonoServer<Api, unknown, AuthEnv>(api, handlers, {});
+
+// The parent app owns the middleware; the contract app is mounted beneath it.
+const app = new Hono<AuthEnv>();
+app.use("*", requireAuthentication); // sets `identity`
+app.route("/", contract);
+```
+
+`Env` defaults to Hono's `BlankEnv`, so handlers that don't read middleware
+context need no annotation and are unchanged.
+
 See [`cerato`](https://www.npmjs.com/package/cerato) for how to define an API, and [`@cerato/client-fetch`](https://www.npmjs.com/package/@cerato/client-fetch) for a matching typed client.

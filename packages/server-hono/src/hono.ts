@@ -58,13 +58,21 @@ type HonoInput<E extends AnyEndpoint> = {
   outputFormat: "json";
 };
 
+// `Env` is threaded through the whole handler tree so a handler can read the
+// Hono context variables that server-owned middleware set upstream (e.g. an
+// authenticated identity) as a *typed* value rather than through a cast. It
+// defaults to `BlankEnv`, so an API served without such middleware — the common
+// case — keeps its existing, un-annotated handler signatures. Auth itself stays
+// server-owned and out of the contract; this is only the plumbing that carries
+// its result to the handler with types intact.
 type HonoHandlerForEndpoint<
   Path extends PathParts,
   E extends AnyEndpoint,
   Services,
+  Env extends BlankEnv = BlankEnv,
 > = E extends Endpoint<infer _M, infer I, infer _O, infer _Q, infer _H>
   ? (
-      ctx: HandlerContext<BlankEnv, Path, E, Services> & {
+      ctx: HandlerContext<Env, Path, E, Services> & {
         body: I;
         query: QueryForEndpoint<E>;
       },
@@ -75,19 +83,21 @@ export type WithHandlerIfRequired<
   Path extends PathParts,
   E extends AnyEndpoint | API | undefined,
   Services,
+  Env extends BlankEnv = BlankEnv,
 > = E extends AnyEndpoint
-  ? HonoHandlerForEndpoint<Path, E, Services>
+  ? HonoHandlerForEndpoint<Path, E, Services, Env>
   : E extends API
-    ? HonoTraverseApi<Path, E, Services>
+    ? HonoTraverseApi<Path, E, Services, Env>
     : {};
 
 export type HonoHandlersForEndpointMapping<
   Path extends PathParts,
   EM extends AnyEndpointMapping,
   Services,
+  Env extends BlankEnv = BlankEnv,
 > = {
   [K in keyof EM as K extends "children" ? never : K]: EM[K] extends AnyEndpoint
-    ? HonoHandlerForEndpoint<Path, EM[K], Services>
+    ? HonoHandlerForEndpoint<Path, EM[K], Services, Env>
     : never;
 };
 // Kind of dodgy re-use of the API handling for Multi Routes
@@ -95,18 +105,26 @@ export type HonoHandlerForMulti<
   Path extends PathParts,
   M extends AnyMulti,
   Services,
-> = HonoHandlersForEndpointMapping<Path, EndpointMappingForMulti<M>, Services> &
-  WithHandlerIfRequired<Path, ChildrenForMulti<M>, Services>;
+  Env extends BlankEnv = BlankEnv,
+> = HonoHandlersForEndpointMapping<
+  Path,
+  EndpointMappingForMulti<M>,
+  Services,
+  Env
+> &
+  WithHandlerIfRequired<Path, ChildrenForMulti<M>, Services, Env>;
 
 export type HonoHandlersForAPI<
   Path extends PathParts,
   A extends API,
   Services,
+  Env extends BlankEnv = BlankEnv,
 > = {
   [K in keyof A]: HonoHandlersFor<
     AppendToPath<Path, K & string>,
     A[K],
-    Services
+    Services,
+    Env
   >;
 };
 
@@ -114,23 +132,31 @@ export type HonoHandlersForAPI<
  * For each of the parts of an API, defer to the correct type mapping to turn the type that describes the
  *   API to the tree of Hono handlers needed to serve that API.
  */
-export type HonoTraverseApi<Path extends PathParts, A extends API, Services> = {
+export type HonoTraverseApi<
+  Path extends PathParts,
+  A extends API,
+  Services,
+  Env extends BlankEnv = BlankEnv,
+> = {
   [K in keyof A]: A[K] extends AnyEndpoint
     ? HonoHandlerForEndpoint<
         AppendToPath<Path, K extends string ? K : never>,
         A[K],
-        Services
+        Services,
+        Env
       >
     : A[K] extends AnyMulti
       ? HonoHandlerForMulti<
           AppendToPath<Path, K extends string ? K : never>,
           A[K],
-          Services
+          Services,
+          Env
         >
       : HonoTraverseApi<
           AppendToPath<Path, K & string>,
           A[K] extends API ? A[K] : never,
-          Services
+          Services,
+          Env
         >;
 };
 
@@ -138,12 +164,13 @@ export type HonoHandlersFor<
   Path extends PathParts,
   A extends API | AnyEndpoint | AnyMulti,
   Services,
+  Env extends BlankEnv = BlankEnv,
 > = A extends AnyMulti
-  ? HonoHandlerForMulti<Path, A, Services>
+  ? HonoHandlerForMulti<Path, A, Services, Env>
   : A extends AnyEndpoint
-    ? HonoHandlerForEndpoint<Path, A, Services>
+    ? HonoHandlerForEndpoint<Path, A, Services, Env>
     : A extends API
-      ? HonoHandlersForAPI<Path, A, Services>
+      ? HonoHandlersForAPI<Path, A, Services, Env>
       : never;
 
 const flattenPath = <P extends PathParts>(path: P): FlattenedPath<P> => {
@@ -371,12 +398,30 @@ const traverseApi = <Path extends PathParts, A extends API, Services>(
   });
 };
 
-export const createHonoServer = <A extends API, Services>(
+/**
+ * Drop the caller-facing `Env` from a handler tree before handing it to the
+ * `Env`-agnostic traversal machinery. `Env` only enriches the *type* of
+ * `ctx.hono`; at runtime every handler is invoked with the live Hono context
+ * regardless. This is the single place that relationship is intentionally
+ * erased — the richer-`Env` handler is contravariant with the `BlankEnv` one
+ * the traversal expects, so the widening must launder through `unknown`.
+ * Confining it here keeps that escape hatch from spreading to other call sites.
+ */
+const eraseEnv = <A extends API, Services, Env extends BlankEnv>(
+  handlers: HonoTraverseApi<[], A, Services, Env>,
+): HonoTraverseApi<[], A, Services> =>
+  handlers as unknown as HonoTraverseApi<[], A, Services>;
+
+export const createHonoServer = <
+  A extends API,
+  Services,
+  Env extends BlankEnv = BlankEnv,
+>(
   api: A,
-  handlers: HonoTraverseApi<[], A, Services>,
+  handlers: HonoTraverseApi<[], A, Services, Env>,
   services: Services,
 ): Hono => {
   const app = new Hono();
-  traverseApi(api, handlers, app, ["api"], services);
+  traverseApi(api, eraseEnv(handlers), app, ["api"], services);
   return app;
 };
